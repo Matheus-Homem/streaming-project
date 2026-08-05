@@ -8,7 +8,7 @@ from ingestion.use_case import IngestionPipeline
 
 
 class TestIngestionPipeline(unittest.TestCase):
-    
+
     def setUp(self):
         self.client_mock = Mock(spec=IngestionClientBase)
         self.engine_mock = Mock(spec=IngestionEngineBase)

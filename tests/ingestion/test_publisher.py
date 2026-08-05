@@ -18,6 +18,7 @@ def _raw_event(event_id="1"):
         payload={"id": event_id},
     )
 
+
 class TestJsonSerializer(unittest.TestCase):
 
     def setUp(self):
@@ -33,7 +34,6 @@ class TestJsonSerializer(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             self.serializer.serialize("any-topic", non_serializable_value)
-
 
 
 class TestIngestionPublisher(unittest.TestCase):
@@ -65,7 +65,9 @@ class TestIngestionPublisher(unittest.TestCase):
             IngestionPublisher()
 
     def test_publish_sends_all_events_and_flushes(self):
-        publisher = IngestionPublisher(bootstrap_servers=["broker:9092"], topic="events-raw")
+        publisher = IngestionPublisher(
+            bootstrap_servers=["broker:9092"], topic="events-raw"
+        )
         events = [_raw_event("1"), _raw_event("2")]
         publisher.publish(events)
 
@@ -73,7 +75,9 @@ class TestIngestionPublisher(unittest.TestCase):
         self.producer_instance_mock.flush.assert_called_once()
 
     def test_publish_raises_on_kafka_error(self):
-        publisher = IngestionPublisher(bootstrap_servers=["broker:9092"], topic="events-raw")
+        publisher = IngestionPublisher(
+            bootstrap_servers=["broker:9092"], topic="events-raw"
+        )
         self.producer_instance_mock.send.side_effect = KafkaError("broker down")
         with self.assertRaises(KafkaError):
             publisher.publish([_raw_event("1")])

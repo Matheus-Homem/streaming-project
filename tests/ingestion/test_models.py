@@ -11,6 +11,7 @@ from ingestion.models import (
     get_source_config,
 )
 
+
 def _valid_github_event_payload(**overrides):
     payload = {
         "id": "1",
