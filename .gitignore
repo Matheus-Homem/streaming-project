@@ -1,4 +1,14 @@
+# Environments and Settings
 .venv/
-tmp/
 .env
-**.pyc
+
+# IDEs
+.vscode/
+
+# Test Cache
+.coverage
+
+# Temporary Files
+tmp/
+*.pyc
+__pycache__/
