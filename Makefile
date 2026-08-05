@@ -7,9 +7,9 @@ clean:
 
 neat:
 	@echo "🧼 Cleaning code using autoflake, isort and black..."
-	@autoflake --remove-all-unused-imports --recursive --in-place ingestion tests
-	@isort --profile black ingestion tests
-	@black ingestion tests
+	@autoflake --remove-all-unused-imports --recursive --in-place shared ingestion tests
+	@isort --profile black shared ingestion tests
+	@black shared ingestion tests
 	@echo "✨ Code successful cleaned!"
 
 test:
