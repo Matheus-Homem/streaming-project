@@ -5,6 +5,10 @@
 # IDEs
 .vscode/
 
+# AI
+.claude/
+.agents/
+
 # Test Cache
 .coverage
 
