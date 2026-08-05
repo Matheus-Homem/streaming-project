@@ -2,8 +2,8 @@
 
 clean:
 	@echo "🧼 Cleaning cache files..."
-	@find . -type f -name "*.pyc" -delete
-	@find . -type d -name "__pycache__" -delete
+	@find . -type f -name "*.pyc" ! -path "./.venv/*" -delete
+	@find . -type d -name "__pycache__" ! -path "./.venv/*" -delete
 
 neat:
 	@echo "🧼 Cleaning code using autoflake, isort and black..."
