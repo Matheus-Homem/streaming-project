@@ -3,13 +3,11 @@ from logging import getLogger
 
 from dotenv import load_dotenv
 
-from ingestion.client import IngestionClient
-from ingestion.engine import IngestionEngine
+import ingestion.adapters as ing
 from ingestion.models import SourceType
-from ingestion.publisher import IngestionPublisher
 from ingestion.use_case import IngestionPipeline
+from ingestion.utils import RetryTimer
 from shared.logger import setup_logging
-from shared.timer import RetryTimer
 
 load_dotenv()
 setup_logging(warning_level_loggers=["kafka"])
@@ -50,9 +48,9 @@ def configure_ingestion_pipeline(
     org: str = None,
 ) -> IngestionPipeline:
     return IngestionPipeline(
-        client=IngestionClient(source_type, owner, repo, org),
-        engine=IngestionEngine(source_type),
-        producer=IngestionPublisher(),
+        client=ing.IngestionClient(source_type, owner, repo, org),
+        engine=ing.IngestionEngine(source_type),
+        producer=ing.IngestionPublisher(),
     )
 
 
