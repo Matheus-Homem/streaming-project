@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 from requests import ConnectionError, HTTPError, Session
 
-from ingestion.client import IngestionClient
+from ingestion.adapters.client import IngestionClient
 from ingestion.models import SourceType
 
 
