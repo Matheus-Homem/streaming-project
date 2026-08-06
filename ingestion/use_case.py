@@ -1,8 +1,8 @@
 from logging import getLogger
 
-from ingestion.client import IngestionClientBase
-from ingestion.engine import IngestionEngineBase
-from ingestion.publisher import IngestionPublisherBase
+from ingestion.adapters.client import IngestionClientBase
+from ingestion.adapters.engine import IngestionEngineBase
+from ingestion.adapters.publisher import IngestionPublisherBase
 
 
 class IngestionPipeline:
