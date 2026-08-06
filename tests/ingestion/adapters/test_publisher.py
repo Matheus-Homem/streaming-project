@@ -4,8 +4,8 @@ from unittest.mock import Mock, patch
 
 from kafka.errors import KafkaError
 
+from ingestion.adapters.publisher import IngestionPublisher, JsonSerializer
 from ingestion.models import GitHubEventType, RawEvent, SourceType
-from ingestion.publisher import IngestionPublisher, JsonSerializer
 
 
 def _raw_event(event_id="1"):
@@ -39,7 +39,7 @@ class TestJsonSerializer(unittest.TestCase):
 class TestIngestionPublisher(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("ingestion.publisher.KafkaProducer")
+        patcher = patch("ingestion.adapters.publisher.KafkaProducer")
         self.kafka_producer_cls_mock = patcher.start()
         self.addCleanup(patcher.stop)
 
