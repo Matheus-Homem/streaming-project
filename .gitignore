@@ -1,0 +1,18 @@
+# Environments and Settings
+.venv/
+.env
+
+# IDEs
+.vscode/
+
+# AI
+.claude/
+.agents/
+
+# Test Cache
+.coverage
+
+# Temporary Files
+tmp/
+*.pyc
+__pycache__/
