@@ -1,5 +1,5 @@
 import argparse
-from time import sleep
+from logging import getLogger
 
 from dotenv import load_dotenv
 
@@ -9,6 +9,7 @@ from ingestion.models import SourceType
 from ingestion.publisher import IngestionPublisher
 from ingestion.use_case import IngestionPipeline
 from shared.logger import setup_logging
+from shared.timer import RetryTimer
 
 load_dotenv()
 setup_logging(warning_level_loggers=["kafka"])
@@ -50,8 +51,10 @@ def configure_ingestion_pipeline(
 
 
 def main():
+    timer = RetryTimer()
     args = build_arguments()
     source_enum = SourceType(args.source)
+    logger = getLogger("Application")
 
     ingestion_pipeline = configure_ingestion_pipeline(
         source_type=source_enum,
@@ -61,8 +64,15 @@ def main():
     )
 
     while True:
-        ingestion_pipeline.execute()
-        sleep(5)
+        try:
+            logger.info("Iniciando processo de extração de eventos")
+            ingestion_pipeline.execute()
+            logger.info("Processo de extração de eventos finalizado com sucesso")
+            timer.reset().sleep()
+        except Exception:
+            logger.info("Processo de extração de eventos finalizado com erros")
+            logger.info(f"Dormindo por {timer} segundos")
+            timer.sleep().increase()
 
 
 if __name__ == "__main__":
