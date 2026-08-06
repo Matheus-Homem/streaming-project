@@ -35,9 +35,7 @@ class IngestionEngine(IngestionEngineBase):
             try:
                 formatted_events.append(self._event_model(**event))
             except ValidationError:
-                self.logger.exception(
-                    f"Invalid event skipped (id={event.get("id")})"
-                )
+                self.logger.exception(f"Invalid event skipped (id={event.get("id")})")
         return formatted_events
 
     def process(self, events: list[dict[str, Any]]) -> list[RawEvent]:
