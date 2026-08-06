@@ -4,7 +4,7 @@ import sys
 
 def setup_logging(warning_level_loggers: list[str] = None):
     log_format = logging.Formatter(
-        " %(asctime)s | %(levelname)s | %(name)s: %(message)s",
+        " %(asctime)s | %(levelname)s | %(name)s ::: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
