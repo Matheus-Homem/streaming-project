@@ -3,8 +3,8 @@ from time import sleep as time_sleep
 
 class RetryTimer:
 
-    def __init__(self):
-        self._time = 5
+    def __init__(self, default_time: int):
+        self._time = default_time
         self._max_time = 60 * 5
 
     def __str__(self):
