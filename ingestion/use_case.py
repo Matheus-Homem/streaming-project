@@ -19,11 +19,9 @@ class IngestionPipeline:
         self.producer = producer
 
     def execute(self):
-        self.logger.info(f"Iniciando processo de ingestão para eventos")
         raw_events = self.client.get_events()
-
-        self.logger.info(f"{len(raw_events)} eventos brutos obtidos")
+        self.logger.info(f"{len(raw_events)} raw events fetched")
         processed_events = self.engine.process(raw_events)
+        self.logger.info("Event standardization finished")
         self.producer.publish(processed_events)
-
-        self.logger.info("Processo finalizado com sucesso")
+        self.logger.info("Event publishing finished")

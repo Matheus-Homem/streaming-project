@@ -46,8 +46,8 @@ class IngestionPublisher(IngestionPublisherBase):
         try:
             for event in events:
                 self._producer.send(self._topic, value=event.model_dump(mode="json"))
-            self.logger.info("Todos eventos enfileirados com sucesso")
+            self.logger.info("Event enqueueing completed successfully")
             self._producer.flush()
         except KafkaError:
-            self.logger.exception(f"Falha ao publicar eventos em {self._topic}")
+            self.logger.exception(f"Failed to publish events to {self._topic}")
             raise

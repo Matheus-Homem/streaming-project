@@ -65,13 +65,13 @@ def main():
 
     while True:
         try:
-            logger.info("Iniciando processo de extração de eventos")
+            logger.info("Starting event extraction process")
             ingestion_pipeline.execute()
-            logger.info("Processo de extração de eventos finalizado com sucesso")
+            logger.info("Event extraction process finished successfully")
             timer.reset().sleep()
         except Exception:
-            logger.info("Processo de extração de eventos finalizado com erros")
-            logger.info(f"Dormindo por {timer} segundos")
+            logger.info("Event extraction process finished with errors")
+            logger.info(f"Sleeping for {timer} seconds")
             timer.sleep().increase()
 
 

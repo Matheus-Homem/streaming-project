@@ -50,10 +50,10 @@ class IngestionClient(IngestionClientBase):
 
     def get_events(self) -> list[dict[str, Any]]:
         try:
-            self.logger.info(f"Realizando GET na url '{self.url}'")
+            self.logger.info(f"Performing GET on url '{self.url}'")
             events = self.session.get(self.url, timeout=10)
             events.raise_for_status()
             return events.json()
         except Exception:
-            self.logger.exception(f"Falha ao buscar eventos em '{self.url}'")
+            self.logger.exception(f"Failed to fetch events from '{self.url}'")
             raise
