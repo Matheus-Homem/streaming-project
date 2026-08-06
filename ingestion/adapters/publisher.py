@@ -34,15 +34,21 @@ class IngestionPublisher(IngestionPublisherBase):
         topic: str = "events-raw",
     ):
         self.logger = getLogger(self.__class__.__name__)
+        self._bootstrap_servers = bootstrap_servers
+        self._topic = topic
+        self._producer = None
+
+    def _initialize_producer(self):
         self._producer = KafkaProducer(
             bootstrap_servers=(
-                bootstrap_servers or [os.environ["KAFKA_BOOTSTRAP_SERVERS"]]
+                self._bootstrap_servers or [os.environ["KAFKA_BOOTSTRAP_SERVERS"]]
             ),
             value_serializer=JsonSerializer(),
         )
-        self._topic = topic
 
     def publish(self, events: list[RawEvent]) -> None:
+        if not self._producer:
+            self._initialize_producer()
         try:
             for event in events:
                 self._producer.send(self._topic, value=event.model_dump(mode="json"))
