@@ -16,22 +16,28 @@ setup_logging(warning_level_loggers=["kafka"])
 
 
 def build_arguments():
-    parser = argparse.ArgumentParser(description="Script de Ingestão de Dados.")
+    parser = argparse.ArgumentParser(description="Data Ingestion Script")
 
     parser.add_argument(
         "--source",
         required=True,
         choices=["github", "gitlab"],
-        help="Origem dos dados (Obrigatório)",
+        help="Data source (Required)",
     )
     parser.add_argument(
-        "--owner", required=False, default=None, help="Dono do repositório (Opcional)"
+        "--owner", required=False, default=None, help="Repository owner (Optional)"
     )
     parser.add_argument(
-        "--repo", required=False, default=None, help="Nome do repositório (Opcional)"
+        "--repo", required=False, default=None, help="Repository name (Optional)"
     )
     parser.add_argument(
-        "--org", required=False, default=None, help="Nome da organização (Opcional)"
+        "--org", required=False, default=None, help="Organization name (Optional)"
+    )
+    parser.add_argument(
+        "--poll-interval",
+        required=False,
+        default=5,
+        help="Interval between ingestion runs (Optional)",
     )
 
     return parser.parse_args()
@@ -51,10 +57,13 @@ def configure_ingestion_pipeline(
 
 
 def main():
-    timer = RetryTimer()
-    args = build_arguments()
-    source_enum = SourceType(args.source)
     logger = getLogger("Application")
+    args = build_arguments()
+    logger.info(
+        f"Starting application with parameters source={args.source}, owner={args.owner}, repo={args.repo}, org={args.org}, poll_interval={args.poll_interval}"
+    )
+    timer = RetryTimer(int(args.poll_interval))
+    source_enum = SourceType(args.source)
 
     ingestion_pipeline = configure_ingestion_pipeline(
         source_type=source_enum,
