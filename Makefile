@@ -1,4 +1,4 @@
-.PHONY: neat test clean
+.PHONY: neat test clean ingestion-default kafka-up kafka-down
 
 clean:
 	@echo "🧼 Cleaning cache files..."
@@ -16,3 +16,15 @@ test:
 	@echo "🧪 Running suite tests..."
 	-@pytest -s -vv --log-cli-level=INFO --cov=. --cov-report=term-missing tests
 	@$(MAKE) clean
+
+ingestion-default:
+	@python -m ingestion.app --source github
+
+kafka-up:
+	@echo "🚀 Starting Kafka docker environment..."
+	@docker compose -f docker/docker-compose.yml up -d
+
+kafka-down:
+	@echo "🛑 Stopping Kafka docker environment..."
+	@docker compose -f docker/docker-compose.yml down
+
