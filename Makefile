@@ -11,10 +11,11 @@ neat:
 	@isort --profile black shared ingestion tests
 	@black shared ingestion tests
 	@echo "✨ Code successful cleaned!"
+	@$(MAKE) clean
 
 test:
 	@echo "🧪 Running suite tests..."
-	-@pytest -s -vv --log-cli-level=INFO --cov=. --cov-report=term-missing tests
+	-@python -B -m pytest -s -vv --log-cli-level=INFO --cov=ingestion --cov-report=term-missing tests
 	@$(MAKE) clean
 
 ingestion-default:
