@@ -1,5 +1,6 @@
 import argparse
 import unittest
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 from ingestion.adapters import (
@@ -13,6 +14,7 @@ from ingestion.app import (
     main,
 )
 from ingestion.models import SourceType
+from ingestion.utils import RateLimitError
 
 
 class TestBuildArguments(unittest.TestCase):
@@ -108,6 +110,43 @@ class TestMain(unittest.TestCase):
         pipeline.execute.assert_called_once()
         timer.sleep.assert_called_once()
         timer.increase.assert_called_once()
+
+    @patch("ingestion.app.RetryTimer")
+    @patch("ingestion.app.configure_ingestion_pipeline")
+    @patch("ingestion.app.build_arguments")
+    def test_rate_limit_error_path(
+        self,
+        mock_build_arguments,
+        mock_configure_pipeline,
+        mock_retry_timer,
+    ):
+        mock_build_arguments.return_value = argparse.Namespace(
+            source="github",
+            owner=None,
+            repo=None,
+            org=None,
+            poll_interval=5,
+        )
+
+        pipeline = Mock()
+
+        expected_at = datetime(2028, 8, 7, 13, 48, 0)
+        pipeline.execute.side_effect = RateLimitError(expected_at=expected_at)
+
+        mock_configure_pipeline.return_value = pipeline
+
+        timer = Mock()
+        timer.schedule_sleep.return_value = timer
+        timer.reset.return_value = timer
+        mock_retry_timer.return_value = timer
+
+        with self.assertRaises(KeyboardInterrupt):
+            timer.reset.side_effect = KeyboardInterrupt()
+            main()
+
+        pipeline.execute.assert_called_once()
+        timer.schedule_sleep.assert_called_once_with(expected_at)
+        timer.reset.assert_called_once()
 
 
 if __name__ == "__main__":

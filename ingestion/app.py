@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import ingestion.adapters as ing
 from ingestion.models import SourceType
 from ingestion.use_case import IngestionPipeline
-from ingestion.utils import RetryTimer
+from ingestion.utils import RateLimitError, RetryTimer
 from shared.logger import setup_logging
 
 load_dotenv()
@@ -72,13 +72,19 @@ def main():
 
     while True:
         try:
-            logger.info("Starting event extraction process")
             ingestion_pipeline.execute()
             logger.info("Event extraction process finished successfully")
             timer.reset().sleep()
+        except RateLimitError as e:
+            logger.error(
+                f"Extraction from {source_enum.value.upper()} reached rate-limit: {e}"
+            )
+            timer.schedule_sleep(e.expected_at).reset()
         except Exception:
-            logger.info("Event extraction process finished with errors")
-            logger.info(f"Sleeping for {timer} seconds")
+            logger.error(
+                f"Extraction from {source_enum.value.upper()} finished with unexpected errors"
+            )
+            logger.error(f"Sleeping for {timer} seconds")
             timer.sleep().increase()
 
 
