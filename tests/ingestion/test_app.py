@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from ingestion.adapters import (
     IngestionClient,
     IngestionEngine,
-    IngestionPublisher,
+    IngestionProducer,
 )
 from ingestion.app import (
     build_arguments,
@@ -44,7 +44,7 @@ class TestConfigureIngestionPipeline(unittest.TestCase):
 
         self.assertIsInstance(pipeline.client, IngestionClient)
         self.assertIsInstance(pipeline.engine, IngestionEngine)
-        self.assertIsInstance(pipeline.producer, IngestionPublisher)
+        self.assertIsInstance(pipeline.producer, IngestionProducer)
 
 
 class TestMain(unittest.TestCase):

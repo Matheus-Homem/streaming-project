@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import ingestion.adapters as ing
 from ingestion.models import SourceType
 from ingestion.use_case import IngestionPipeline
-from ingestion.utils import RateLimitError, RetryTimer
+from ingestion.utils import RateLimitError, RetryTimer, BoundedUniqueTracker
 from shared.logger import setup_logging
 
 load_dotenv()
@@ -50,7 +50,8 @@ def configure_ingestion_pipeline(
     return IngestionPipeline(
         client=ing.IngestionClient(source_type, owner, repo, org),
         engine=ing.IngestionEngine(source_type),
-        producer=ing.IngestionPublisher(),
+        producer=ing.IngestionProducer(),
+        tracker=BoundedUniqueTracker(100),
     )
 
 
@@ -76,7 +77,7 @@ def main():
             logger.info("Event extraction process finished successfully")
             timer.reset().sleep()
         except RateLimitError as e:
-            logger.error(
+            logger.warning(
                 f"Extraction from {source_enum.value.upper()} reached rate-limit: {e}"
             )
             timer.schedule_sleep(e.reset_at).reset()
