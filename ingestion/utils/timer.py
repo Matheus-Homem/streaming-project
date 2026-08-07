@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from time import sleep as time_sleep
 
 
@@ -13,6 +14,13 @@ class RetryTimer:
 
     def sleep(self) -> "RetryTimer":
         time_sleep(self._time)
+        return self
+
+    def schedule_sleep(self, sleep_datetime: datetime) -> "RetryTimer":
+        diff = sleep_datetime - datetime.now(tz=timezone.utc)
+        if diff.total_seconds() < 0:
+            return self
+        time_sleep(int(diff.total_seconds()))
         return self
 
     def reset(self) -> "RetryTimer":

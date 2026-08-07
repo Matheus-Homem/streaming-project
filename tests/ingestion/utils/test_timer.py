@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from ingestion.utils.timer import RetryTimer
@@ -17,7 +18,7 @@ class TestRetryTimer(unittest.TestCase):
 
     def test_timer_cant_initialize_whithout_default_time(self):
         with self.assertRaises(TypeError):
-            timer = RetryTimer()
+            RetryTimer()
 
     def test_timer_str(self):
         timer = RetryTimer(TEST_TIME)
@@ -30,6 +31,32 @@ class TestRetryTimer(unittest.TestCase):
 
         sleep_mock.assert_called_once_with(TEST_TIME)
         self.assertIsInstance(returned_timer, RetryTimer)
+
+    @patch("ingestion.utils.timer.datetime")
+    @patch("ingestion.utils.timer.time_sleep")
+    def test_timer_schedule_sleep(self, sleep_mock, datetime_mock):
+        timer = RetryTimer(TEST_TIME)
+        datetime_mock.now.return_value = datetime(
+            2026, 8, 7, 14, 0, 0, tzinfo=timezone.utc
+        )
+        invalid_datetime = datetime(2026, 8, 7, 15, 0, 0, tzinfo=timezone.utc)
+        returned_timer = timer.schedule_sleep(invalid_datetime)
+
+        self.assertIs(returned_timer, timer)
+        sleep_mock.assert_called_once()
+
+    @patch("ingestion.utils.timer.datetime")
+    @patch("ingestion.utils.timer.time_sleep")
+    def test_invalid_timer_schedule_sleep(self, sleep_mock, datetime_mock):
+        timer = RetryTimer(TEST_TIME)
+        datetime_mock.now.return_value = datetime(
+            2026, 8, 7, 14, 0, 0, tzinfo=timezone.utc
+        )
+        invalid_datetime = datetime(2026, 8, 7, 13, 0, 0, tzinfo=timezone.utc)
+        returned_timer = timer.schedule_sleep(invalid_datetime)
+
+        self.assertIs(returned_timer, timer)
+        sleep_mock.assert_not_called()
 
     def test_timer_reset(self):
         timer = RetryTimer(TEST_TIME)
