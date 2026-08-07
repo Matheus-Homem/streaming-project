@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 from kafka.errors import KafkaError
 
-from ingestion.adapters.publisher import IngestionPublisher, JsonSerializer
+from ingestion.adapters.producer import IngestionProducer, JsonSerializer
 from ingestion.models import GitHubEventType, RawEvent, SourceType
 
 
@@ -36,10 +36,10 @@ class TestJsonSerializer(unittest.TestCase):
             self.serializer.serialize("any-topic", non_serializable_value)
 
 
-class TestIngestionPublisher(unittest.TestCase):
+class TestIngestionProducer(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("ingestion.adapters.publisher.KafkaProducer")
+        patcher = patch("ingestion.adapters.producer.KafkaProducer")
         self.kafka_producer_cls_mock = patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -47,47 +47,47 @@ class TestIngestionPublisher(unittest.TestCase):
         self.kafka_producer_cls_mock.return_value = self.producer_instance_mock
 
     def test_init_uses_explicit_bootstrap_servers(self):
-        publisher = IngestionPublisher(
+        producer = IngestionProducer(
             bootstrap_servers=["broker:9092"],
             topic="events-raw",
         )
 
-        publisher.publish([])
+        producer.publish([])
 
         _, kwargs = self.kafka_producer_cls_mock.call_args
         self.assertEqual(kwargs["bootstrap_servers"], ["broker:9092"])
 
     @patch.dict(os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "localhost:29092"})
     def test_init_falls_back_to_env_var_when_not_provided(self):
-        publisher = IngestionPublisher()
+        producer = IngestionProducer()
 
-        publisher.publish([])
+        producer.publish([])
 
         _, kwargs = self.kafka_producer_cls_mock.call_args
         self.assertEqual(kwargs["bootstrap_servers"], ["localhost:29092"])
 
     @patch.dict(os.environ, {}, clear=True)
     def test_init_raises_key_error_when_no_servers_and_no_env_var(self):
-        publisher = IngestionPublisher()
+        producer = IngestionProducer()
 
         with self.assertRaises(KeyError):
-            publisher.publish([])
+            producer.publish([])
 
     def test_publish_sends_all_events_and_flushes(self):
-        publisher = IngestionPublisher(
+        producer = IngestionProducer(
             bootstrap_servers=["broker:9092"],
             topic="events-raw",
         )
 
         events = [_raw_event("1"), _raw_event("2")]
 
-        publisher.publish(events)
+        producer.publish(events)
 
         self.assertEqual(self.producer_instance_mock.send.call_count, 2)
         self.producer_instance_mock.flush.assert_called_once()
 
     def test_publish_raises_on_kafka_error(self):
-        publisher = IngestionPublisher(
+        producer = IngestionProducer(
             bootstrap_servers=["broker:9092"],
             topic="events-raw",
         )
@@ -95,7 +95,7 @@ class TestIngestionPublisher(unittest.TestCase):
         self.producer_instance_mock.send.side_effect = KafkaError("broker down")
 
         with self.assertRaises(KafkaError):
-            publisher.publish([_raw_event("1")])
+            producer.publish([_raw_event("1")])
 
         self.producer_instance_mock.flush.assert_not_called()
 
