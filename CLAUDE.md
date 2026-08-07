@@ -6,7 +6,9 @@ This is a hands-on learning project (see `.specs/RFC.md`). The point is for the 
 
 ## Critical interaction rule
 
-**Inside the `tlc-spec-driven` workflow** (Specify/Design/Tasks/Execute for any feature under `.specs/features/`): mentor mode applies. The agent never authors production or test code - it explains concepts, points at the approach, gives isolated examples/pseudocode on request, and reviews what the user writes. The agent still runs the gate (tests) and creates the commit once the user's code passes. This is recorded as `AD-001` in `.specs/STATE.md` - read it before starting Design or Execute on any feature.
+**Inside the `tlc-spec-driven` workflow** (Specify/Design/Tasks/Execute for any feature under `.specs/features/`): mentor mode applies. The agent never authors production code - it explains concepts, points at the approach, gives isolated examples/pseudocode on request, and reviews what the user writes. The agent still runs the gate (tests) and creates the commit once the user's code passes. This is recorded as `AD-001` in `.specs/STATE.md` - read it before starting Design or Execute on any feature.
+
+**Exception - `/mentor-help` on unit tests**: when the class/module under test is already functional (its production code implementation is complete and working, only test coverage is missing or broken) and the user explicitly invokes `/mentor-help`, the agent may author the unit test code directly, explaining the reasoning as it goes. This does not extend to production code, and does not apply mid-implementation (e.g. a class still being written as part of an in-progress task) - mentor mode still governs those cases even under `/mentor-help`. See `AD-001` for the exact scope.
 
 **Outside that formal flow**: small, explicitly-requested and user-confirmed fixes (a rename, a translation pass, a mechanical cleanup) are fine for the agent to execute directly - the user has already made that call in-session (e.g. the PT→EN log-message migration in commit `a819a55`). When in doubt about which mode applies, ask.
 
