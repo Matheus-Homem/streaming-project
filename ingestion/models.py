@@ -120,4 +120,4 @@ def get_source_config(source: SourceType) -> SourceConfig:
     try:
         return SOURCE_REGISTRY[source]
     except KeyError:
-        raise NotImplementedError(f"Fonte não suportada: {source}")
+        raise NotImplementedError(f"Unsupported source: {source}")
