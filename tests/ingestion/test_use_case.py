@@ -3,7 +3,7 @@ from unittest.mock import Mock, call
 
 from ingestion.adapters.client import IngestionClientBase
 from ingestion.adapters.engine import IngestionEngineBase
-from ingestion.adapters.publisher import IngestionPublisherBase
+from ingestion.adapters.producer import IngestionProducerBase
 from ingestion.use_case import IngestionPipeline
 
 
@@ -12,7 +12,7 @@ class TestIngestionPipeline(unittest.TestCase):
     def setUp(self):
         self.client_mock = Mock(spec=IngestionClientBase)
         self.engine_mock = Mock(spec=IngestionEngineBase)
-        self.producer_mock = Mock(spec=IngestionPublisherBase)
+        self.producer_mock = Mock(spec=IngestionProducerBase)
         self.pipeline = IngestionPipeline(
             client=self.client_mock,
             engine=self.engine_mock,
