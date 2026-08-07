@@ -35,6 +35,10 @@ Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifi
 - `flink/`, `infra/` - scaffolding for future work, currently empty
 - `.specs/` - the spec-driven workflow: `RFC.md` (why this project exists), `STATE.md` (decisions + handoff), `features/[name]/` (spec, tasks, validation per feature)
 
+## Temporary files
+
+Any temporary file related to this project (scratch scripts, packaged archives, exported samples, etc.) goes in `tmp/` at the repo root - not the harness's scratchpad, not `/tmp`. `tmp/` already holds working artifacts like `sample_analysis.py`, `event_sample.json`, `dedup_challenge.ipynb`.
+
 ## Dev commands
 
 **Always run these with `.venv` activated** (`source .venv/bin/activate`, prompt shows `(.venv)`). The Makefile targets call bare `pytest`/`python`/`autoflake`/`isort`/`black` and rely on `PATH` resolving to `.venv/bin`; without activation they silently fall back to the system interpreter/tools (missing dev deps like `pytest-cov`, or "command not found"). If a `make` command fails this way, the fix is to activate the venv, not to hardcode `.venv/bin/...` paths into the Makefile.
