@@ -79,7 +79,7 @@ def main():
             logger.error(
                 f"Extraction from {source_enum.value.upper()} reached rate-limit: {e}"
             )
-            timer.schedule_sleep(e.expected_at).reset()
+            timer.schedule_sleep(e.reset_at).reset()
         except Exception:
             logger.error(
                 f"Extraction from {source_enum.value.upper()} finished with unexpected errors"

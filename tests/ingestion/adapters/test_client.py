@@ -50,7 +50,7 @@ class TestIngestionClient(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._build_client(owner="kubernetes", repo="kubernetes", org="anthropics")
 
-    def test_is_rate_limited(self):
+    def test_is_rate_not_limited(self):
         client = self._build_client()
         response_mock = MagicMock(spec=Response)
         response_mock.status_code = 200
@@ -59,7 +59,7 @@ class TestIngestionClient(unittest.TestCase):
 
         self.assertEqual(request_not_limited, False)
 
-    def test_is_rate_not_limited(self):
+    def test_is_rate_limited(self):
         client = self._build_client()
         rate_limit_remaining = client.source_config.rate_limit_remaining
         response_mock = MagicMock(spec=Response)
@@ -153,7 +153,7 @@ class TestIngestionClient(unittest.TestCase):
         with self.assertRaises(RateLimitError) as context:
             client.get_events()
 
-        self.assertEqual(context.exception.expected_at, expected_rate_limit_reset)
+        self.assertEqual(context.exception.reset_at, expected_rate_limit_reset)
         self.assertIn(
             "Connection from source reached rate limit", str(context.exception)
         )

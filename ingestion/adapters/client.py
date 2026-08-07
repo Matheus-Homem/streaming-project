@@ -80,6 +80,6 @@ class IngestionClient(IngestionClientBase):
         response = self._get_response()
 
         if self._is_rate_limited(response):
-            raise RateLimitError(expected_at=self._get_rate_limit_reset(response))
+            raise RateLimitError(reset_at=self._get_rate_limit_reset(response))
 
         return self._parse_response(response)

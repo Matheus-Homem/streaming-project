@@ -130,8 +130,8 @@ class TestMain(unittest.TestCase):
 
         pipeline = Mock()
 
-        expected_at = datetime(2028, 8, 7, 13, 48, 0)
-        pipeline.execute.side_effect = RateLimitError(expected_at=expected_at)
+        reset_at = datetime(2028, 8, 7, 13, 48, 0)
+        pipeline.execute.side_effect = RateLimitError(reset_at=reset_at)
 
         mock_configure_pipeline.return_value = pipeline
 
@@ -145,7 +145,7 @@ class TestMain(unittest.TestCase):
             main()
 
         pipeline.execute.assert_called_once()
-        timer.schedule_sleep.assert_called_once_with(expected_at)
+        timer.schedule_sleep.assert_called_once_with(reset_at)
         timer.reset.assert_called_once()
 
 
