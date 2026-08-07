@@ -10,7 +10,7 @@ from kafka.serializer import Serializer
 from ingestion.models import RawEvent
 
 
-class IngestionPublisherBase(ABC):
+class IngestionProducerBase(ABC):
 
     @abstractmethod
     def publish(self, events: list[RawEvent]) -> None:
@@ -26,7 +26,7 @@ class JsonSerializer(Serializer):
         return json.dumps(value).encode("utf-8")
 
 
-class IngestionPublisher(IngestionPublisherBase):
+class IngestionProducer(IngestionProducerBase):
 
     def __init__(
         self,
