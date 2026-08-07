@@ -5,6 +5,7 @@ from ingestion.adapters.client import IngestionClientBase
 from ingestion.adapters.engine import IngestionEngineBase
 from ingestion.adapters.producer import IngestionProducerBase
 from ingestion.use_case import IngestionPipeline
+from ingestion.utils import BoundedUniqueTracker
 
 
 class TestIngestionPipeline(unittest.TestCase):
@@ -13,29 +14,36 @@ class TestIngestionPipeline(unittest.TestCase):
         self.client_mock = Mock(spec=IngestionClientBase)
         self.engine_mock = Mock(spec=IngestionEngineBase)
         self.producer_mock = Mock(spec=IngestionProducerBase)
+        self.tracker_mock = Mock(spec=BoundedUniqueTracker)
         self.pipeline = IngestionPipeline(
             client=self.client_mock,
             engine=self.engine_mock,
             producer=self.producer_mock,
+            tracker=self.tracker_mock,
         )
         self.manager = Mock()
         self.manager.attach_mock(self.client_mock, "client")
         self.manager.attach_mock(self.engine_mock, "engine")
         self.manager.attach_mock(self.producer_mock, "producer")
+        self.manager.attach_mock(self.tracker_mock, "tracker")
 
     def test_execute_calls_dependencies_in_order_with_correct_arguments(self):
         raw_events = [{"id": "1"}]
         processed_events = [Mock()]
         self.client_mock.get_events.return_value = raw_events
         self.engine_mock.process.return_value = processed_events
+        self.tracker_mock.is_duplicated.return_value = False
 
         self.pipeline.execute()
 
+        event_id = processed_events[0].source_event_id
         self.assertEqual(
             self.manager.mock_calls,
             [
                 call.client.get_events(),
                 call.engine.process(raw_events),
+                call.tracker.is_duplicated(value=event_id),
+                call.tracker.record(value=event_id),
                 call.producer.publish(processed_events),
             ],
         )
