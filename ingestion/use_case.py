@@ -22,7 +22,7 @@ class IngestionPipeline:
         self.tracker = tracker
 
     def execute(self):
-        events_publish= []
+        events_publish = []
         raw_events = self.client.get_events()
         self.logger.info(f"{len(raw_events)} raw events fetched")
 
