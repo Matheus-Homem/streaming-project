@@ -26,7 +26,7 @@ Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifi
 
 **Today**: `ingestion/` polls the GitHub public events API, normalizes payloads into a `RawEvent` envelope (Pydantic), and publishes them to a single Kafka topic (`events-raw`, shared across sources - GitLab support exists as an unwired model stub). Local Kafka runs via `docker/docker-compose.yml` (3 controllers + 3 brokers + Kafka UI on `localhost:8080`).
 
-**Planned, not yet built**: Flink jobs consuming `events-raw` for normalization/aggregation, OpenSearch as the metrics/search store, Grafana dashboards on top. See `.specs/features/github-ingestion/spec.md` for the current feature's exact scope and what's still open (P2: poll-loop resilience, GitHub rate-limit handling, dedup, configurable poll interval).
+**Planned, not yet built**: Flink jobs consuming `events-raw` for normalization/aggregation, OpenSearch as the metrics/search store, Grafana dashboards on top. See `.specs/features/streaming-ingestion/spec.md` for the current feature's exact scope and what's still open (P2: poll-loop resilience, GitHub rate-limit handling, dedup, configurable poll interval).
 
 ## Repository layout
 
