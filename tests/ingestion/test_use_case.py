@@ -74,6 +74,19 @@ class TestIngestionPipeline(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.pipeline.execute()
 
+    def test_execute_skips_duplicated_events(self):
+        duplicated_event = Mock()
+        duplicated_event.source_event_id = "1"
+        valid_event = Mock()
+        valid_event.source_event_id = "2"
+        self.client_mock.get_events.return_value = [{"id": "1"}, {"id": "2"}]
+        self.engine_mock.process.return_value = [duplicated_event, valid_event]
+        self.tracker_mock.is_duplicated.side_effect = [True, False]
+
+        self.pipeline.execute()
+        self.tracker_mock.record.assert_called_once_with(value="2")
+        self.producer_mock.publish.assert_called_once_with([valid_event])
+
 
 if __name__ == "__main__":
     unittest.main()
