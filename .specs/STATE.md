@@ -6,7 +6,7 @@
 - **Decision**: Across this entire project, the agent never authors production or test implementation code. The user implements every task; the agent operates in mentor mode (Level 2-3 by default: explains concepts, points at the approach, gives isolated pseudocode/examples on request) and reviews the user's code before the task is marked done. The agent still runs the gate (tests) and creates the atomic commit once the user's code passes.
 - **Reason**: `.specs/RFC.md` states the explicit purpose of this project is for the user to learn Kafka, Flink, architecture design, and observability tooling hands-on, using `.claude/skills/technical-learning-mentor` to force their own reasoning. It explicitly says the agent must not develop the code in their place.
 - **Trade-off**: Slower delivery cadence than standard tlc-spec-driven execution. Agent-made commits carry a `Co-Authored-By: Claude` trailer per this harness's convention, which the user accepted knowingly (git history will show it).
-- **Scope**: Governs the Execute phase for every feature under `.specs/features/` in this repository, superseding the skill's default "agent implements each task" behavior. **Amended by AD-002** for the unit-test-authoring exception.
+- **Scope**: Governs the Execute phase for every feature under `.specs/features/` in this repository, superseding the skill's default "agent implements each task" behavior. **Amended by AD-002** for the unit-test-authoring exception, **amended by AD-003** (agent no longer creates the commit either - the "creates the atomic commit" clause above is superseded).
 - **Date**: 2026-08-05
 - **Status**: active
 
@@ -18,13 +18,21 @@
 - **Date**: 2026-08-07
 - **Status**: active
 
+### AD-003
+- **Decision**: The agent never runs `git commit` (or any commit-creating operation - revert, cherry-pick, merge) on this repository, in any mode, including the `tlc-spec-driven` Execute phase and the Verifier's report-writing step. The user makes every commit. The agent may stage changes, run gates, and propose a commit message, but stops short of committing.
+- **Reason**: User request, triggered after reviewing a session where the agent made 3 commits (including Verifier-authored `validation.md`/traceability updates) directly to local `main` without the user pressing the button. Those 3 commits were reverted via `git reset --soft` back to `603f99d` on 2026-08-10 - their content is preserved as staged/working-tree changes, nothing was lost, but the commits themselves no longer exist in history.
+- **Trade-off**: Every gate-passing task or validation cycle now ends with the agent handing off a diff + suggested message instead of a finished commit - one extra manual step per unit of work, in exchange for the user retaining full control over what lands in history and when.
+- **Scope**: Project-wide, all workflows, supersedes the "creates the commit" clause in `AD-001` and any similar clause in `.claude/skills/tlc-spec-driven` (that skill's default "the orchestrator creates the commit" behavior does not apply here). Also recorded in `CLAUDE.md`'s Critical interaction rule.
+- **Date**: 2026-08-10
+- **Status**: active
+
 ## Handoff
 
-- **Feature**: streaming-ingestion (renamed from `github-ingestion` - directory and doc references updated 2026-08-10; the git branch itself, `feat/github-ingestion-resilience`, was NOT renamed since it's pushed to `origin` and a rename there is a remote operation outside this session's authorization)
-- **Phase / Task**: All 5 tasks (T1-T5) across Phase 1/2/3 verified complete against `tasks.md`'s `Done when` checklists and re-checked in that file - 2026-08-10 `/checkpoint` reconciliation. Gate (`python3 -m pytest tests/ingestion -q`) passes with 63 tests. T4's dedup filtering was additionally confirmed empirically against real GitHub API traffic in `tmp/log` (a poll with 100% repeat events was fully skipped; the next poll's all-new events all published).
-- **Completed**: T1, T2, T3, T4, T5 - all checkboxes updated in `tasks.md`
+- **Feature**: streaming-ingestion
+- **Phase / Task**: All 5 P2 tasks (T1-T5) were previously committed/merged to `main` via PR #2 (`603f99d`). This session's Verifier work (iteration 1 FAIL → 2 test gaps found in ING-10/ING-12 → fixes applied via `/mentor-help` → iteration 2 PASS, 66 tests, all 12 requirements Verified) was done as 3 commits that have since been **reverted per AD-003** (`git reset --soft 603f99d`) - their content is intact as uncommitted changes in the working tree, ready for the user to review and commit themselves.
+- **Completed**: T1-T5 (committed, on `main`). The P2 verification/fix cycle (test coverage for ING-10/ING-12 + `type=int` fix + typo fix + `validation.md` + `spec.md` traceability update) is done and gate-passing but **uncommitted** - staged in the working tree, pending the user's own `git commit`.
 - **In-progress**: none
-- **Next step**: The feature's code-level work is done. `spec.md`'s Success Criteria still has one open item: *"The service can run unattended for hours without crashing on a transient GitHub/Kafka failure (P2, pending)"* - left open by user decision (2026-08-10), not converted into a new task. **Live validation in progress**: a terminal window the user is watching hit `RateLimitError` at 2026-08-10 12:49:35 (`reset_at=2026-08-10 16:42:13+00:00`) - this is a real, unplanned occurrence of exactly the T1+T2 scenario (rate limit → backoff capped at 300s → no crash). User will check after the reset time whether the service resumes publishing normally; if so, that closes the open Success Criteria item with real evidence instead of a synthetic test. No commits made this session by user's explicit choice ("Eu decido quando commitar as alterações") - T2/T3/T4 code is functional and gate-passing but still uncommitted.
+- **Next step**: User commits the staged P2-verification changes (`ingestion/app.py`, `ingestion/use_case.py`, `tests/ingestion/adapters/test_client.py`, `tests/ingestion/test_app.py`, `.specs/STATE.md`, `.specs/features/streaming-ingestion/{spec,validation}.md`, `.specs/LESSONS.md`, `.specs/lessons.json`) at their own pace - the agent will not commit them. Separately, `spec.md`'s Success Criteria still has one open item: *"The service can run unattended for hours without crashing on a transient GitHub/Kafka failure"* - a live observation, gated on a `RateLimitError` the user is watching resolve (`reset_at=2026-08-10 16:42:13 UTC`). After that, the next feature-level activity is planning Flink normalization/aggregation over `events-raw`.
 - **Blockers**: none
-- **Uncommitted files**: `.specs/STATE.md`, `.specs/features/streaming-ingestion/tasks.md` (checkbox reconciliation), plus the user's already-uncommitted implementation diffs (`ingestion/app.py` tracker size/comment, `Makefile`, `tests/ingestion/test_use_case.py` new dedup test) - not yet committed as of this handoff
-- **Branch**: feat/github-ingestion-resilience (tracks `origin/feat/github-ingestion-resilience`)
+- **Uncommitted files**: see Next step list above - all staged, working tree otherwise matches `origin/main`
+- **Branch**: main (feature branch `feat/github-ingestion-resilience` merged via PR #2, not deleted locally/remotely - deletion is a remote operation outside this session's default authorization)

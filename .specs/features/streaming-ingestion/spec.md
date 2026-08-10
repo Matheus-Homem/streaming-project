@@ -8,7 +8,7 @@ The streaming project needs a continuously running service that pulls public Git
 
 - [x] A developer can bring up a local 3-controller/3-broker Kafka cluster + Kafka UI with one `docker compose up`
 - [x] Public GitHub events are fetched, validated, and published to Kafka as a standardized `RawEvent` envelope
-- [ ] The ingestion service survives transient GitHub/Kafka failures and avoids re-publishing duplicates within a run (P2 - not yet built)
+- [x] The ingestion service survives transient GitHub/Kafka failures and avoids re-publishing duplicates within a run (P2 - code-level behavior verified by an independent Verifier, `validation.md` iteration 2, PASS; the "runs unattended for hours" success criterion below is a separate, still-open live-observation item)
 
 ## Out of Scope
 
@@ -135,16 +135,16 @@ The streaming project needs a continuously running service that pulls public Git
 | ING-06 | P1: Fetch/normalize/publish (engine normalization) | - | Verified |
 | ING-07 | P1: Fetch/normalize/publish (publisher) | - | Verified |
 | ING-08 | P1: Fetch/normalize/publish (pipeline orchestration) | - | Verified |
-| ING-09 | P2: Resilience & dedup (crash recovery) | In Tasks (T1) | In Tasks |
-| ING-10 | P2: Resilience & dedup (rate limiting) | In Tasks (T2) | In Tasks |
-| ING-11 | P2: Resilience & dedup (dedup within run) | In Tasks (T3, T4) | In Tasks |
-| ING-12 | P2: Resilience & dedup (configurable poll interval) | In Tasks (T5) | In Tasks |
+| ING-09 | P2: Resilience & dedup (crash recovery) | In Tasks (T1) | ✅ Verified |
+| ING-10 | P2: Resilience & dedup (rate limiting) | In Tasks (T2) | ✅ Verified |
+| ING-11 | P2: Resilience & dedup (dedup within run) | In Tasks (T3, T4) | ✅ Verified |
+| ING-12 | P2: Resilience & dedup (configurable poll interval) | In Tasks (T5) | ✅ Verified |
 
 **ID format:** `ING-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 12 total, 8 verified against existing code + passing test suite (`pytest tests` - 35 passed), 4 mapped to `.specs/features/streaming-ingestion/tasks.md` (T1-T5), 0 unmapped
+**Coverage:** 12 total, 12 verified against existing code + passing test suite (`make test` - 66 passed), 0 with open fix tasks (`.specs/features/streaming-ingestion/validation.md` iteration 2 - ING-10's rate-limit-detection edge branch and ING-12's `--poll-interval` explicit-override are now covered), 0 unmapped
 
 ---
 
