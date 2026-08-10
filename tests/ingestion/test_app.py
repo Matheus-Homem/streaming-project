@@ -26,6 +26,13 @@ class TestBuildArguments(unittest.TestCase):
         self.assertEqual(args.source, "github")
         self.assertEqual(args.poll_interval, 5)
 
+    @patch("sys.argv", ["app.py", "--source", "github", "--poll-interval", "10"])
+    def test_explicit_poll_interval_is_used(self):
+        args = build_arguments()
+
+        self.assertEqual(args.poll_interval, 10)
+        self.assertIsInstance(args.poll_interval, int)
+
     @patch("sys.argv", ["app.py"])
     def test_source_is_required(self):
         with self.assertRaises(SystemExit):

@@ -35,6 +35,7 @@ def build_arguments():
         "--poll-interval",
         required=False,
         default=5,
+        type=int,
         help="Interval between ingestion runs (Optional)",
     )
 
