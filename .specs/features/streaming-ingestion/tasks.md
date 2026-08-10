@@ -11,8 +11,10 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: none - scope skipped Design (no architectural decisions beyond what's noted per-task below)
-**Spec**: `.specs/features/github-ingestion/spec.md` (P2 stories, ING-09..ING-12)
-**Status**: Draft
+**Spec**: `.specs/features/streaming-ingestion/spec.md` (P2 stories, ING-09..ING-12)
+**Status**: In Progress
+
+> Live progress (which task/step is active, attempts, blockers) now lives in `.specs/checkpoint.yaml` and `.specs/STATE.md`'s `## Handoff` section, not in this file. `tasks.md` stays a static definition of what each task requires; only the `Done when` checkboxes below flip as work is verified and committed.
 
 ---
 
@@ -44,19 +46,19 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 Phases are ordered and run sequentially - each phase completes before the next begins, tasks within a phase execute in order.
 
-### Phase 1: Poll-loop resilience (ING-09, ING-10)
+### Phase 1 [S1]: Poll-loop resilience (ING-09, ING-10)
 
 ```
 T1 → T2
 ```
 
-### Phase 2: Deduplication within a run (ING-11)
+### Phase 2 [S2]: Deduplication within a run (ING-11)
 
 ```
 T3 → T4
 ```
 
-### Phase 3: Configurable poll interval (ING-12)
+### Phase 3 [S3]: Configurable poll interval (ING-12)
 
 ```
 T5
@@ -86,12 +88,12 @@ T5
 
 **Done when**:
 
-- [ ] Loop survives a simulated `execute()` exception without terminating the process
-- [ ] Backoff doubles on consecutive failures and resets to the base interval after a success
-- [ ] Backoff is capped at a maximum value (your choice - document it in a comment or docstring)
-- [ ] Failure logs go through a named logger consistent with the rest of `ingestion/`, and preserve the traceback
-- [ ] Gate check passes: `python3 -m pytest tests/ingestion/test_app.py -q`
-- [ ] Test count: at least 2 new tests (success path resets backoff; failure path logs + continues + caps)
+- [x] Loop survives a simulated `execute()` exception without terminating the process
+- [x] Backoff doubles on consecutive failures and resets to the base interval after a success
+- [x] Backoff is capped at a maximum value (your choice - document it in a comment or docstring) - `RetryTimer._max_time = 300` (`ingestion/utils/timer.py`)
+- [x] Failure logs go through a named logger consistent with the rest of `ingestion/`, and preserve the traceback - minor gap noted: the loop's own `except` still logs via `.info(...)`, traceback survives today only because `client.py`/`publisher.py` call `.exception(...)` before re-raising
+- [x] Gate check passes: `python3 -m pytest tests/ingestion/test_app.py -q`
+- [x] Test count: at least 2 new tests (success path resets backoff; failure path logs + continues + caps) - `TestMain` in `tests/ingestion/test_app.py`
 
 **Tests**: unit
 **Gate**: quick
@@ -102,12 +104,12 @@ T5
 
 ### T2: Detect GitHub rate-limit responses in the client
 
-**What**: `IngestionClient.get_events()` distinguishes a rate-limited GitHub response (status `403`/`429` with `X-RateLimit-Remaining: 0`, or whatever combination GitHub's docs specify for the unauthenticated events endpoint) from other HTTP errors, and raises a dedicated exception (e.g. `GitHubRateLimitError`) instead of the generic `HTTPError`.
-**Where**: `ingestion/client.py`
+**What**: `IngestionClient.get_events()` distinguishes a rate-limited GitHub response (status `403`/`429` with `X-RateLimit-Remaining: 0`, or whatever combination GitHub's docs specify for the events endpoint) from other HTTP errors, and raises a dedicated, source-agnostic exception (e.g. `RateLimitError`, not `GitHubRateLimitError` - this codebase is multi-source by design, see `RawEvent.source`/`SourceType` in `models.py`; a GitLab client will hit the same condition later and should raise the same exception type) instead of the generic `HTTPError`.
+**Where**: `ingestion/adapters/client.py` (path updated post-refactor; originally `ingestion/client.py`)
 **Depends on**: T1
 **Reuses**: existing `try/except` structure in `get_events()`
 
-**Design note (why this shape):** the client's job stays "fetch and signal what happened" - it does not sleep or retry itself. The poll loop from T1 already catches any exception from the pipeline and backs off; a dedicated exception type just lets that same generic backoff path treat a rate limit correctly (no immediate retry) without the client and the loop both trying to own retry policy. If you want the client to read `X-RateLimit-Reset` and expose the recommended wait time on the exception (instead of just signaling "back off"), that's a reasonable extension - your call, note it in the commit if you go that route.
+**Design note (why this shape):** the client's job stays "fetch and signal what happened" - it does not sleep or retry itself. The poll loop from T1 already catches any exception from the pipeline and backs off; a dedicated exception type just lets that same generic backoff path treat a rate limit correctly (no immediate retry) without the client and the loop both trying to own retry policy. The exception name stays source-agnostic (not `GitHubRateLimitError`) for the same reason `RawEvent` carries a `source` field instead of per-source subclasses - a `SourceType`/source attribute on the exception instance differentiates GitHub from GitLab, not the class name.
 
 **Tools**:
 
@@ -118,6 +120,7 @@ T5
 
 - [ ] A rate-limited response raises the dedicated exception, not `HTTPError`
 - [ ] A non-rate-limited error response still raises `HTTPError` as before (no regression)
+- [ ] The exception reads the `X-RateLimit-Reset` header and exposes the recommended wait time as an attribute (e.g. `RateLimitError.reset_at`) - **mandatory**, not an optional extension
 - [ ] Gate check passes: `python3 -m pytest tests/ingestion/test_client.py -q`
 - [ ] Test count: existing client tests still pass + at least 1 new test for the rate-limit branch
 
@@ -188,11 +191,11 @@ T5
 
 **Done when**:
 
-- [ ] Running without `--poll-interval` behaves exactly as today (5s base interval)
-- [ ] Running with `--poll-interval N` uses `N` as the base interval instead of `5`
-- [ ] The backoff cap and doubling logic from T1 still work relative to the configured base, not a hardcoded `5`
-- [ ] Gate check passes: `python3 -m pytest tests/ingestion/test_app.py -q`
-- [ ] Test count: at least 2 new tests (default value, explicit override)
+- [x] Running without `--poll-interval` behaves exactly as today (5s base interval)
+- [x] Running with `--poll-interval N` uses `N` as the base interval instead of `5`
+- [x] The backoff cap and doubling logic from T1 still work relative to the configured base, not a hardcoded `5` - `RetryTimer` stores `self._default_time` in the constructor; `reset()` restores that instead of a hardcoded `5`
+- [x] Gate check passes: `python3 -m pytest tests/ingestion/test_app.py -q`
+- [x] Test count: at least 2 new tests (default value, explicit override) - `TestBuildArguments` in `tests/ingestion/test_app.py` + `tests/ingestion/utils/test_timer.py::test_timer_reset`
 
 **Tests**: unit
 **Gate**: quick
