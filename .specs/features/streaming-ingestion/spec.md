@@ -144,7 +144,7 @@ The streaming project needs a continuously running service that pulls public Git
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 12 total, 8 verified against existing code + passing test suite (`pytest tests` - 35 passed), 4 mapped to `.specs/features/github-ingestion/tasks.md` (T1-T5), 0 unmapped
+**Coverage:** 12 total, 8 verified against existing code + passing test suite (`pytest tests` - 35 passed), 4 mapped to `.specs/features/streaming-ingestion/tasks.md` (T1-T5), 0 unmapped
 
 ---
 
