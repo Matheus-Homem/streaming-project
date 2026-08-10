@@ -51,7 +51,7 @@ def configure_ingestion_pipeline(
         client=ing.IngestionClient(source_type, owner, repo, org),
         engine=ing.IngestionEngine(source_type),
         producer=ing.IngestionProducer(),
-        tracker=BoundedUniqueTracker(100),
+        tracker=BoundedUniqueTracker(120), #  Cover 4 polls with 30 events/poll, which is the window that the API tend to resend the same event
     )
 
 
