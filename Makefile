@@ -16,7 +16,6 @@ neat:
 test:
 	@echo "🧪 Running suite tests..."
 	-@python -B -m pytest -s -vv --log-cli-level=INFO --cov=ingestion --cov-report=term-missing tests
-	@$(MAKE) clean
 
 ingestion-default:
 	@python -m ingestion.app --source github
