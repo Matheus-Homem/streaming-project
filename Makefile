@@ -27,4 +27,3 @@ kafka-up:
 kafka-down:
 	@echo "🛑 Stopping Kafka docker environment..."
 	@docker compose -f docker/docker-compose.yml down
-
