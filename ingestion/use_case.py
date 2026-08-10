@@ -39,4 +39,4 @@ class IngestionPipeline:
                 events_publish.append(event)
 
         self.producer.publish(events_publish)
-        self.logger.info(f"{len(events_publish)} sucesful published")
+        self.logger.info(f"{len(events_publish)} successful published")
