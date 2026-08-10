@@ -1,9 +1,11 @@
 from logging import getLogger
 
-from ingestion.adapters.client import IngestionClientBase
-from ingestion.adapters.engine import IngestionEngineBase
-from ingestion.adapters.producer import IngestionProducerBase
-from ingestion.utils.tracker import BoundedUniqueTracker
+from ingestion.ports import (
+    IngestionClientBase,
+    IngestionEngineBase,
+    IngestionProducerBase,
+    UniqueTrackerBase,
+)
 
 
 class IngestionPipeline:
@@ -13,7 +15,7 @@ class IngestionPipeline:
         client: IngestionClientBase,
         engine: IngestionEngineBase,
         producer: IngestionProducerBase,
-        tracker: BoundedUniqueTracker,
+        tracker: UniqueTrackerBase,
     ):
         self.logger = getLogger(self.__class__.__name__)
         self.client = client

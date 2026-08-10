@@ -1,6 +1,5 @@
 import json
 import os
-from abc import ABC, abstractmethod
 from logging import getLogger
 
 from kafka import KafkaProducer
@@ -8,17 +7,7 @@ from kafka.errors import KafkaError
 from kafka.serializer import Serializer
 
 from ingestion.models import RawEvent
-
-
-class IngestionProducerBase(ABC):
-
-    @abstractmethod
-    def publish(self, events: list[RawEvent]) -> None:
-        """Publica todos os eventos no tópico kafka
-
-        Args:
-            events (list[RawEvent]): Lista de eventos padronizados da forma que é esperada pela camada Raw.
-        """
+from ingestion.ports import IngestionProducerBase
 
 
 class JsonSerializer(Serializer):

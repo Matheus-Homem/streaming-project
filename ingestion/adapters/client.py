@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from logging import getLogger
 from typing import Any
@@ -6,18 +5,8 @@ from typing import Any
 from requests import Response, Session
 
 from ingestion.models import SourceType, get_source_config
+from ingestion.ports import IngestionClientBase
 from ingestion.utils import RateLimitError
-
-
-class IngestionClientBase(ABC):
-
-    @abstractmethod
-    def get_events(self) -> list[dict[str, Any]]:
-        """Faz uma requisição no client e retorna a lista de eventos.
-
-        Returns:
-            list[dict[str, Any]]: Lista de dicionários, onde cada dicionário representa um evento.
-        """
 
 
 class IngestionClient(IngestionClientBase):

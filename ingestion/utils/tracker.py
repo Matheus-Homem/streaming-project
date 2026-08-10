@@ -1,7 +1,9 @@
 from collections import deque
 
+from ingestion.ports import UniqueTrackerBase
 
-class BoundedUniqueTracker:
+
+class BoundedUniqueTracker(UniqueTrackerBase):
 
     def __init__(self, max_size: int):
         self.deque = deque(maxlen=max_size)
@@ -12,7 +14,7 @@ class BoundedUniqueTracker:
             return True
         return False
 
-    def record(self, value: str) -> bool:
+    def record(self, value: str) -> None:
         if len(self.deque) >= self.deque.maxlen:
             oldest = self.deque.popleft()
             self.memory.remove(oldest)
