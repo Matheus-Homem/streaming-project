@@ -70,6 +70,17 @@ class TestIngestionClient(unittest.TestCase):
 
         self.assertEqual(request_not_limited, True)
 
+    def test_is_rate_not_limited_on_403_with_remaining_quota(self):
+        client = self._build_client()
+        rate_limit_remaining = client.source_config.rate_limit_remaining
+        response_mock = MagicMock(spec=Response)
+        response_mock.status_code = 403
+        response_mock.headers = {rate_limit_remaining: "10"}
+
+        request_not_limited = client._is_rate_limited(response_mock)
+
+        self.assertEqual(request_not_limited, False)
+
     def test_can_get_rate_limit_reset(self):
         client = self._build_client()
         rate_limit_reset = client.source_config.rate_limit_reset
@@ -139,6 +150,19 @@ class TestIngestionClient(unittest.TestCase):
         self.assertEqual(result, expected_events)
         client._get_response.assert_called_once_with()
         client._is_rate_limited.assert_called_once_with(response)
+        client._parse_response.assert_called_once_with(response)
+
+    def test_can_get_events_on_403_without_rate_limit(self):
+        client = self._build_client()
+        response = MagicMock()
+        expected_events = [{"id": "123"}]
+        client._get_response = MagicMock(return_value=response)
+        client._is_rate_limited = MagicMock(return_value=False)
+        client._parse_response = MagicMock(return_value=expected_events)
+
+        result = client.get_events()
+
+        self.assertEqual(result, expected_events)
         client._parse_response.assert_called_once_with(response)
 
     def test_can_not_get_events_rate_limit_error(self):
