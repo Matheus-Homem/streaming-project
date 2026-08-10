@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import ingestion.adapters as ing
 from ingestion.models import SourceType
 from ingestion.use_case import IngestionPipeline
-from ingestion.utils import RateLimitError, RetryTimer, BoundedUniqueTracker
+from ingestion.utils import BoundedUniqueTracker, RateLimitError, RetryTimer
 from shared.logger import setup_logging
 
 load_dotenv()
