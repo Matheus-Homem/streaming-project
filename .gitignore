@@ -16,4 +16,7 @@
 tmp/
 *.pyc
 __pycache__/
+
+# Local dev-progress state
+.specs/checkpoint.yaml
 .ptbr/
