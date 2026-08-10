@@ -118,11 +118,11 @@ T5
 
 **Done when**:
 
-- [ ] A rate-limited response raises the dedicated exception, not `HTTPError`
-- [ ] A non-rate-limited error response still raises `HTTPError` as before (no regression)
-- [ ] The exception reads the `X-RateLimit-Reset` header and exposes the recommended wait time as an attribute (e.g. `RateLimitError.reset_at`) - **mandatory**, not an optional extension
-- [ ] Gate check passes: `python3 -m pytest tests/ingestion/test_client.py -q`
-- [ ] Test count: existing client tests still pass + at least 1 new test for the rate-limit branch
+- [x] A rate-limited response raises the dedicated exception, not `HTTPError` - `RateLimitError` (`ingestion/utils/exceptions.py`), raised from `ingestion/adapters/client.py:82-83`
+- [x] A non-rate-limited error response still raises `HTTPError` as before (no regression) - `test_can_not_get_events` / `test_can_not_parse_response`
+- [x] The exception reads the `X-RateLimit-Reset` header and exposes the recommended wait time as an attribute (e.g. `RateLimitError.reset_at`) - **mandatory**, not an optional extension - `_get_rate_limit_reset` (`client.py:59-61`)
+- [x] Gate check passes: `python3 -m pytest tests/ingestion/test_client.py -q`
+- [x] Test count: existing client tests still pass + at least 1 new test for the rate-limit branch - `test_can_not_get_events_rate_limit_error` (`tests/ingestion/adapters/test_client.py`)
 
 **Tests**: unit
 **Gate**: quick
@@ -140,11 +140,11 @@ T5
 
 **Done when**:
 
-- [ ] An id seen for the first time is reported as not-a-duplicate and is remembered
-- [ ] The same id seen again is reported as a duplicate
-- [ ] The tracker has a bound (document the chosen size and what happens at the boundary - oldest entry evicted)
-- [ ] Gate check passes: `python3 -m pytest tests/ingestion/test_dedup.py -q`
-- [ ] Test count: at least 3 tests (new id, duplicate id, eviction at the bound)
+- [x] An id seen for the first time is reported as not-a-duplicate and is remembered - `test_is_not_duplicate` + `test_can_record`
+- [x] The same id seen again is reported as a duplicate - `test_is_duplicate`
+- [x] The tracker has a bound (document the chosen size and what happens at the boundary - oldest entry evicted) - `BoundedUniqueTracker` (`ingestion/utils/tracker.py`, moved from the planned `ingestion/dedup.py`); size documented as an inline comment at the call site (`ingestion/app.py:54`, `BoundedUniqueTracker(120)`), eviction covered by `test_can_record_full_memory`
+- [x] Gate check passes: `python3 -m pytest tests/ingestion/utils/test_tracker.py -q` (path updated post-refactor; originally `tests/ingestion/test_dedup.py`)
+- [x] Test count: at least 3 tests (new id, duplicate id, eviction at the bound) - 5 tests in `tests/ingestion/utils/test_tracker.py`
 
 **Tests**: unit
 **Gate**: quick
@@ -169,11 +169,11 @@ T5
 
 **Done when**:
 
-- [ ] A duplicate event (same `source_event_id` as one already processed this run) is not passed to `producer.publish()`
-- [ ] A non-duplicate event still reaches `producer.publish()` exactly as before
-- [ ] Existing `IngestionPipeline` tests (order of `client → engine → producer` calls) still pass unmodified in spirit - update them only if the dedup step genuinely changes the call sequence
-- [ ] Gate check passes: `python3 -m pytest tests/ingestion/test_use_case.py -q`
-- [ ] Test count: existing use_case tests still pass + at least 2 new tests (duplicate filtered, non-duplicate passes through)
+- [x] A duplicate event (same `source_event_id` as one already processed this run) is not passed to `producer.publish()` - `test_execute_skips_duplicated_events`; also confirmed empirically in `tmp/log` (poll at 12:43:46: 30 fetched, 30 skipped, 0 published)
+- [x] A non-duplicate event still reaches `producer.publish()` exactly as before - same test + `tmp/log` poll at 12:43:51 (30 fetched, 0 skipped, 30 published)
+- [x] Existing `IngestionPipeline` tests (order of `client → engine → producer` calls) still pass unmodified in spirit - `test_execute_calls_dependencies_in_order_with_correct_arguments` extended in place to include the `tracker` calls, rest unchanged
+- [x] Gate check passes: `python3 -m pytest tests/ingestion/test_use_case.py -q`
+- [x] Test count: existing use_case tests still pass + at least 2 new tests (duplicate filtered, non-duplicate passes through) - both covered by `test_execute_skips_duplicated_events` (asserts `record` only for the non-duplicate id and `publish` only with the non-duplicate event)
 
 **Tests**: unit
 **Gate**: quick
