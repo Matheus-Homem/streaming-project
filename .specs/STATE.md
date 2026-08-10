@@ -20,11 +20,11 @@
 
 ## Handoff
 
-- **Feature**: github-ingestion
-- **Phase / Task**: Tasks approved (5 tasks, `validate_tasks.py` clean) - next is Execute, starting at T1
-- **Completed**: none committed yet
-- **In-progress** (file:line): `ingestion/app.py` - user has an uncommitted draft of T1 (try/except + doubling backoff around the poll loop); reviewed inline, needs: backoff cap, module-scoped logger (not bare `logging`), `.exception()` instead of `.error(f"...")` to keep the traceback
-- **Next step**: User implements T1 per the review notes in `tasks.md`, then the agent runs the gate (`python3 -m pytest tests/ingestion/test_app.py -q`) and commits
+- **Feature**: streaming-ingestion (renamed from `github-ingestion` - directory and doc references updated 2026-08-10; the git branch itself, `feat/github-ingestion-resilience`, was NOT renamed since it's pushed to `origin` and a rename there is a remote operation outside this session's authorization)
+- **Phase / Task**: Phase 1 [S1] (T1, T2) - T1 done and committed; T2 (rate-limit detection in the client) not started per `tasks.md`. **Needs reconciliation before trusting this**: `git log` shows commits after the last `tasks.md` review (`BoundedUniqueTracker` in `ingestion/utils/tracker.py`, wired into `ingestion/use_case.py`/`app.py`, plus an `IngestionProducer`/`JsonSerializer` refactor) that look related to Phase 2's T3/T4 (dedup tracker + wiring) but under different file/class names than the task bodies describe (`ingestion/dedup.py` → became `ingestion/utils/tracker.py`+`BoundedUniqueTracker`). Not verified against T3/T4's `Done when` criteria - do that before marking them complete.
+- **Completed**: T1, T5 (both confirmed via existing tests/gate, checkboxes updated in `tasks.md`)
+- **In-progress** (file:line): `tests/ingestion/utils/test_tracker.py` - untracked, user is writing unit tests for `BoundedUniqueTracker` (production code already functional per git log - falls under `AD-002`'s `/mentor-help` exception if invoked)
+- **Next step**: Reconcile T2/T3/T4 status against the `BoundedUniqueTracker`/`IngestionProducer` work already on the branch (map it to the P2 tasks it satisfies, or determine it's a different concern), then continue Execute from whichever task is actually next
 - **Blockers**: none
-- **Uncommitted files**: `.specs/STATE.md`, `.specs/features/github-ingestion/spec.md`, `.specs/features/github-ingestion/tasks.md`, `ingestion/app.py` (user's in-progress T1 draft)
-- **Branch**: feat/initial_steps
+- **Uncommitted files**: `.specs/STATE.md`, `.specs/features/streaming-ingestion/tasks.md` (this refactor), `tests/ingestion/utils/test_tracker.py` (untracked, in-progress)
+- **Branch**: feat/github-ingestion-resilience (tracks `origin/feat/github-ingestion-resilience`)
