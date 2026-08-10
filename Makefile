@@ -11,11 +11,11 @@ neat:
 	@isort --profile black shared ingestion tests
 	@black shared ingestion tests
 	@echo "✨ Code successful cleaned!"
+	@$(MAKE) clean
 
 test:
 	@echo "🧪 Running suite tests..."
-	-@pytest -s -vv --log-cli-level=INFO --cov=. --cov-report=term-missing tests
-	@$(MAKE) clean
+	-@python -B -m pytest -s -vv --log-cli-level=INFO --cov=ingestion --cov-report=term-missing tests
 
 ingestion-default:
 	@python -m ingestion.app --source github
@@ -27,4 +27,3 @@ kafka-up:
 kafka-down:
 	@echo "🛑 Stopping Kafka docker environment..."
 	@docker compose -f docker/docker-compose.yml down
-

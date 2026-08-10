@@ -1,6 +1,6 @@
 import unittest
 
-from ingestion.engine import IngestionEngine
+from ingestion.adapters.engine import IngestionEngine
 from ingestion.models import GitHubEventType, SourceType
 
 

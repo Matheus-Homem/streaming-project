@@ -92,6 +92,8 @@ class SourceConfig:
     network_events_url: Callable[[str, str], str]
     organization_events_url: Callable[[str], str]
     event_model: EventModel
+    rate_limit_remaining: str
+    rate_limit_reset: str
 
 
 SOURCE_REGISTRY: dict[SourceType, SourceConfig] = {
@@ -100,12 +102,16 @@ SOURCE_REGISTRY: dict[SourceType, SourceConfig] = {
         network_events_url=lambda owner, repo: f"https://api.github.com/networks/{owner}/{repo}/events",
         organization_events_url=lambda org: f"https://api.github.com/orgs/{org}/events",
         event_model=GitHubEvent,
+        rate_limit_remaining="X-RateLimit-Remaining",
+        rate_limit_reset="X-RateLimit-Reset",
     ),
     SourceType.GITLAB: SourceConfig(
         events_url="https://gitlab.com",
         network_events_url=lambda owner, repo: f"https://gitlab.com{owner}/{repo}/events",
         organization_events_url=lambda org: f"https://gitlab.com/{org}/events",
         event_model=GitLabEvent,
+        rate_limit_remaining="RateLimit-Remaining",
+        rate_limit_reset="RateLimit-Reset",
     ),
 }
 
@@ -114,4 +120,4 @@ def get_source_config(source: SourceType) -> SourceConfig:
     try:
         return SOURCE_REGISTRY[source]
     except KeyError:
-        raise NotImplementedError(f"Fonte não suportada: {source}")
+        raise NotImplementedError(f"Unsupported source: {source}")

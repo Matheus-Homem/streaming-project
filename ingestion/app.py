@@ -3,35 +3,39 @@ from logging import getLogger
 
 from dotenv import load_dotenv
 
-from ingestion.client import IngestionClient
-from ingestion.engine import IngestionEngine
+import ingestion.adapters as ing
 from ingestion.models import SourceType
-from ingestion.publisher import IngestionPublisher
 from ingestion.use_case import IngestionPipeline
+from ingestion.utils import BoundedUniqueTracker, RateLimitError, RetryTimer
 from shared.logger import setup_logging
-from shared.timer import RetryTimer
 
 load_dotenv()
 setup_logging(warning_level_loggers=["kafka"])
 
 
 def build_arguments():
-    parser = argparse.ArgumentParser(description="Script de Ingestão de Dados.")
+    parser = argparse.ArgumentParser(description="Data Ingestion Script")
 
     parser.add_argument(
         "--source",
         required=True,
         choices=["github", "gitlab"],
-        help="Origem dos dados (Obrigatório)",
+        help="Data source (Required)",
     )
     parser.add_argument(
-        "--owner", required=False, default=None, help="Dono do repositório (Opcional)"
+        "--owner", required=False, default=None, help="Repository owner (Optional)"
     )
     parser.add_argument(
-        "--repo", required=False, default=None, help="Nome do repositório (Opcional)"
+        "--repo", required=False, default=None, help="Repository name (Optional)"
     )
     parser.add_argument(
-        "--org", required=False, default=None, help="Nome da organização (Opcional)"
+        "--org", required=False, default=None, help="Organization name (Optional)"
+    )
+    parser.add_argument(
+        "--poll-interval",
+        required=False,
+        default=5,
+        help="Interval between ingestion runs (Optional)",
     )
 
     return parser.parse_args()
@@ -44,17 +48,21 @@ def configure_ingestion_pipeline(
     org: str = None,
 ) -> IngestionPipeline:
     return IngestionPipeline(
-        client=IngestionClient(source_type, owner, repo, org),
-        engine=IngestionEngine(source_type),
-        producer=IngestionPublisher(),
+        client=ing.IngestionClient(source_type, owner, repo, org),
+        engine=ing.IngestionEngine(source_type),
+        producer=ing.IngestionProducer(),
+        tracker=BoundedUniqueTracker(120), #  Cover 4 polls with 30 events/poll, which is the window that the API tend to resend the same event
     )
 
 
 def main():
-    timer = RetryTimer()
-    args = build_arguments()
-    source_enum = SourceType(args.source)
     logger = getLogger("Application")
+    args = build_arguments()
+    logger.info(
+        f"Starting application with parameters source={args.source}, owner={args.owner}, repo={args.repo}, org={args.org}, poll_interval={args.poll_interval}"
+    )
+    timer = RetryTimer(int(args.poll_interval))
+    source_enum = SourceType(args.source)
 
     ingestion_pipeline = configure_ingestion_pipeline(
         source_type=source_enum,
@@ -65,13 +73,19 @@ def main():
 
     while True:
         try:
-            logger.info("Starting event extraction process")
             ingestion_pipeline.execute()
             logger.info("Event extraction process finished successfully")
             timer.reset().sleep()
+        except RateLimitError as e:
+            logger.warning(
+                f"Extraction from {source_enum.value.upper()} reached rate-limit: {e}"
+            )
+            timer.schedule_sleep(e.reset_at).reset()
         except Exception:
-            logger.info("Event extraction process finished with errors")
-            logger.info(f"Sleeping for {timer} seconds")
+            logger.error(
+                f"Extraction from {source_enum.value.upper()} finished with unexpected errors"
+            )
+            logger.error(f"Sleeping for {timer} seconds")
             timer.sleep().increase()
 
 

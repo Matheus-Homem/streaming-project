@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:read_text is deprecated:DeprecationWarning",
+    "ignore:open_text is deprecated:DeprecationWarning",
+]
+
+[tool.coverage.run]
+omit = [
+    "*/__init__.py",
+]

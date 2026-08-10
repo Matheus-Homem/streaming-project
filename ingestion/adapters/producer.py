@@ -1,6 +1,5 @@
 import json
 import os
-from abc import ABC, abstractmethod
 from logging import getLogger
 
 from kafka import KafkaProducer
@@ -8,17 +7,7 @@ from kafka.errors import KafkaError
 from kafka.serializer import Serializer
 
 from ingestion.models import RawEvent
-
-
-class IngestionPublisherBase(ABC):
-
-    @abstractmethod
-    def publish(self, events: list[RawEvent]) -> None:
-        """Publica todos os eventos no tópico kafka
-
-        Args:
-            events (list[RawEvent]): Lista de eventos padronizados da forma que é esperada pela camada Raw.
-        """
+from ingestion.ports import IngestionProducerBase
 
 
 class JsonSerializer(Serializer):
@@ -26,7 +15,7 @@ class JsonSerializer(Serializer):
         return json.dumps(value).encode("utf-8")
 
 
-class IngestionPublisher(IngestionPublisherBase):
+class IngestionProducer(IngestionProducerBase):
 
     def __init__(
         self,
@@ -34,15 +23,21 @@ class IngestionPublisher(IngestionPublisherBase):
         topic: str = "events-raw",
     ):
         self.logger = getLogger(self.__class__.__name__)
+        self._bootstrap_servers = bootstrap_servers
+        self._topic = topic
+        self._producer = None
+
+    def _initialize_producer(self):
         self._producer = KafkaProducer(
             bootstrap_servers=(
-                bootstrap_servers or [os.environ["KAFKA_BOOTSTRAP_SERVERS"]]
+                self._bootstrap_servers or [os.environ["KAFKA_BOOTSTRAP_SERVERS"]]
             ),
             value_serializer=JsonSerializer(),
         )
-        self._topic = topic
 
     def publish(self, events: list[RawEvent]) -> None:
+        if not self._producer:
+            self._initialize_producer()
         try:
             for event in events:
                 self._producer.send(self._topic, value=event.model_dump(mode="json"))

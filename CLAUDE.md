@@ -6,7 +6,9 @@ This is a hands-on learning project (see `.specs/RFC.md`). The point is for the 
 
 ## Critical interaction rule
 
-**Inside the `tlc-spec-driven` workflow** (Specify/Design/Tasks/Execute for any feature under `.specs/features/`): mentor mode applies. The agent never authors production or test code - it explains concepts, points at the approach, gives isolated examples/pseudocode on request, and reviews what the user writes. The agent still runs the gate (tests) and creates the commit once the user's code passes. This is recorded as `AD-001` in `.specs/STATE.md` - read it before starting Design or Execute on any feature.
+**Inside the `tlc-spec-driven` workflow** (Specify/Design/Tasks/Execute for any feature under `.specs/features/`): mentor mode applies. The agent never authors production code - it explains concepts, points at the approach, gives isolated examples/pseudocode on request, and reviews what the user writes. The agent still runs the gate (tests) and creates the commit once the user's code passes. This is recorded as `AD-001` in `.specs/STATE.md` - read it before starting Design or Execute on any feature.
+
+**Exception - `/mentor-help` on unit tests**: when the class/module under test is already functional (its production code implementation is complete and working, only test coverage is missing or broken) and the user explicitly invokes `/mentor-help`, the agent may author the unit test code directly, explaining the reasoning as it goes. This does not extend to production code, and does not apply mid-implementation (e.g. a class still being written as part of an in-progress task) - mentor mode still governs those cases even under `/mentor-help`. See `AD-001` for the exact scope.
 
 **Outside that formal flow**: small, explicitly-requested and user-confirmed fixes (a rename, a translation pass, a mechanical cleanup) are fine for the agent to execute directly - the user has already made that call in-session (e.g. the PT→EN log-message migration in commit `a819a55`). When in doubt about which mode applies, ask.
 
@@ -24,7 +26,7 @@ Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifi
 
 **Today**: `ingestion/` polls the GitHub public events API, normalizes payloads into a `RawEvent` envelope (Pydantic), and publishes them to a single Kafka topic (`events-raw`, shared across sources - GitLab support exists as an unwired model stub). Local Kafka runs via `docker/docker-compose.yml` (3 controllers + 3 brokers + Kafka UI on `localhost:8080`).
 
-**Planned, not yet built**: Flink jobs consuming `events-raw` for normalization/aggregation, OpenSearch as the metrics/search store, Grafana dashboards on top. See `.specs/features/github-ingestion/spec.md` for the current feature's exact scope and what's still open (P2: poll-loop resilience, GitHub rate-limit handling, dedup, configurable poll interval).
+**Planned, not yet built**: Flink jobs consuming `events-raw` for normalization/aggregation, OpenSearch as the metrics/search store, Grafana dashboards on top. See `.specs/features/streaming-ingestion/spec.md` for the current feature's exact scope and what's still open (P2: poll-loop resilience, GitHub rate-limit handling, dedup, configurable poll interval).
 
 ## Repository layout
 
@@ -35,7 +37,13 @@ Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifi
 - `flink/`, `infra/` - scaffolding for future work, currently empty
 - `.specs/` - the spec-driven workflow: `RFC.md` (why this project exists), `STATE.md` (decisions + handoff), `features/[name]/` (spec, tasks, validation per feature)
 
+## Temporary files
+
+Any temporary file related to this project (scratch scripts, packaged archives, exported samples, etc.) goes in `tmp/` at the repo root - not the harness's scratchpad, not `/tmp`. `tmp/` already holds working artifacts like `sample_analysis.py`, `event_sample.json`, `dedup_challenge.ipynb`.
+
 ## Dev commands
+
+**Always run these with `.venv` activated** (`source .venv/bin/activate`, prompt shows `(.venv)`). The Makefile targets call bare `pytest`/`python`/`autoflake`/`isort`/`black` and rely on `PATH` resolving to `.venv/bin`; without activation they silently fall back to the system interpreter/tools (missing dev deps like `pytest-cov`, or "command not found"). If a `make` command fails this way, the fix is to activate the venv, not to hardcode `.venv/bin/...` paths into the Makefile.
 
 - `make test` - full suite with coverage (`pytest ... --cov=. --cov-report=term-missing tests`)
 - `make neat` - format/clean (`autoflake` + `isort` + `black` over `shared ingestion tests`)

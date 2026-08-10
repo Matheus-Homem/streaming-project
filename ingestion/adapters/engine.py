@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from datetime import datetime
 from logging import getLogger
 from typing import Any
@@ -6,20 +5,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from ingestion.models import EventModel, RawEvent, SourceType, get_source_config
-
-
-class IngestionEngineBase(ABC):
-
-    @abstractmethod
-    def process(self, events: list[dict[str, Any]]) -> list[RawEvent]:
-        """Processa eventos brutos em forma de dicionário para o padrão de eventos esparos pela camada Raw.
-
-        Args:
-            events (list[dict[str, Any]]): Lista de eventos despadronizados.
-
-        Returns:
-            list[RawEvent]: Lista de eventos padronizados da forma que é esperada pela camada Raw.
-        """
+from ingestion.ports import IngestionEngineBase
 
 
 class IngestionEngine(IngestionEngineBase):
@@ -35,9 +21,7 @@ class IngestionEngine(IngestionEngineBase):
             try:
                 formatted_events.append(self._event_model(**event))
             except ValidationError:
-                self.logger.exception(
-                    f"Invalid event skipped (id={event.get("id")})"
-                )
+                self.logger.exception(f"Invalid event skipped (id={event.get("id")})")
         return formatted_events
 
     def process(self, events: list[dict[str, Any]]) -> list[RawEvent]:
