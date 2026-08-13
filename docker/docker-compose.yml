@@ -109,5 +109,29 @@ services:
       - broker-2
       - broker-3
 
+
+  topic-init:
+    image: apache/kafka:latest
+    container_name: topic-init
+    depends_on:
+      - broker-1
+      - broker-2
+      - broker-3
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: ingestion/Dockerfile
+    container_name: ingestion
+    volumes:
+    - ./scripts:/scripts:ro
+    depends_on:
+      - topic-init
+    command: ["python", "-m", "ingestion.app", "--source", "github"]
+
 volumes:
   kafka-data:
+
