@@ -6,8 +6,8 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from kafka.serializer import Serializer
 
-from ingestion.models import RawEvent
 from ingestion.ports import IngestionProducerBase
+from shared.models import RawEvent
 
 
 class JsonSerializer(Serializer):

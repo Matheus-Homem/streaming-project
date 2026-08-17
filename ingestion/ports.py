@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ingestion.models import RawEvent
+from shared.models import RawEvent
 
 
 class IngestionClientBase(ABC):

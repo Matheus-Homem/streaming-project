@@ -1,0 +1,21 @@
+github:
+  endpoints:
+    default: "https://api.github.com/events"
+    network: "https://api.github.com/networks/{owner}/{repo}/events"
+    organization: "https://api.github.com/orgs/{org}/events"
+  headers:
+    rate_limit_remaining: "X-RateLimit-Remaining"
+    rate_limit_reset: "X-RateLimit-Reset"
+  id_field: "id"
+  type_field: "type"
+
+gitlab:
+  endpoints:
+    default: "https://gitlab.com"
+    network: "https://gitlab.com{owner}/{repo}/events"
+    organization: "https://gitlab.com/{org}/events"
+  headers:
+    rate_limit_remaining: "RateLimit-Remaining"
+    rate_limit_reset: "RateLimit-Reset"
+  id_field: "id"
+  type_field: "object_kind"

@@ -3,96 +3,188 @@ import unittest
 from pydantic import ValidationError
 
 from ingestion.models import (
-    GitHubEvent,
-    GitHubEventType,
-    GitLabEvent,
-    RawEvent,
-    SourceType,
+    EventModel,
+    SourceConfig,
+    SourceYamlEntry,
     get_source_config,
 )
 
 
-def _valid_github_event_payload(**overrides):
-    payload = {
-        "id": "1",
-        "type": "PushEvent",
-        "actor": {"id": 1, "login": "octocat"},
-        "repo": {"id": 1, "name": "octocat/repo"},
-        "payload": {"foo": "bar"},
-        "public": True,
-        "created_at": "2026-08-01T12:00:00Z",
-    }
-    payload.update(overrides)
-    return payload
-
-
-class TestGetSourceConfig(unittest.TestCase):
-
-    def test_returns_config_for_github(self):
-        config = get_source_config(SourceType.GITHUB)
-        self.assertEqual(config.events_url, "https://api.github.com/events")
-        self.assertEqual(config.event_model, GitHubEvent)
-
-    def test_returns_config_for_gitlab(self):
-        config = get_source_config(SourceType.GITLAB)
-        self.assertEqual(config.event_model, GitLabEvent)
-
-    def test_raises_not_implemented_for_unknown_source(self):
-        with self.assertRaises(NotImplementedError):
-            get_source_config("bitbucket")
-
-
-class TestGitHubEvent(unittest.TestCase):
-
-    def test_valid_payload_creates_instance(self):
-        event = GitHubEvent(**_valid_github_event_payload())
-        self.assertEqual(event.id, "1")
-        self.assertEqual(event.type, GitHubEventType.PUSH)
-
-    def test_org_defaults_to_none_when_absent(self):
-        event = GitHubEvent(**_valid_github_event_payload())
-        self.assertIsNone(event.org)
-
-    def test_missing_required_field_raises_validation_error(self):
-        payload = _valid_github_event_payload()
-        del payload["actor"]
-        with self.assertRaises(ValidationError):
-            GitHubEvent(**payload)
-
-    def test_invalid_event_type_raises_validation_error(self):
-        with self.assertRaises(ValidationError):
-            GitHubEvent(**_valid_github_event_payload(type="NotARealEventType"))
-
-
-class TestGitLabEvent(unittest.TestCase):
-
-    def test_valid_minimal_payload_creates_instance(self):
-        event = GitLabEvent(id="1")
-        self.assertEqual(event.id, "1")
-
-
-class TestRawEvent(unittest.TestCase):
+class TestSourceYamlEntry(unittest.TestCase):
 
     def _valid_payload(self, **overrides):
         payload = {
-            "source": SourceType.GITHUB,
-            "source_event_id": "1",
-            "source_event_type": GitHubEventType.PUSH,
-            "observed_at": "2026-08-01T12:00:00",
-            "schema_version": 1,
-            "payload": {"id": "1"},
+            "endpoints": {
+                "default": "https://api.github.com/events",
+                "network": "https://api.github.com/networks/{owner}/{repo}/events",
+                "organization": "https://api.github.com/orgs/{org}/events",
+            },
+            "headers": {
+                "rate_limit_remaining": "X-RateLimit-Remaining",
+                "rate_limit_reset": "X-RateLimit-Reset",
+            },
+            "id_field": "id",
+            "type_field": "type",
         }
         payload.update(overrides)
         return payload
 
     def test_valid_payload_creates_instance(self):
-        raw_event = RawEvent(**self._valid_payload())
-        self.assertEqual(raw_event.source, SourceType.GITHUB)
-        self.assertEqual(raw_event.source_event_type, GitHubEventType.PUSH)
+        entry = SourceYamlEntry(**self._valid_payload())
+        self.assertEqual(entry.endpoints["default"], "https://api.github.com/events")
+        self.assertEqual(entry.headers["rate_limit_remaining"], "X-RateLimit-Remaining")
+        self.assertEqual(entry.id_field, "id")
+        self.assertEqual(entry.type_field, "type")
 
-    def test_invalid_source_raises_validation_error(self):
+    def test_missing_required_field_raises_validation_error(self):
+        payload = self._valid_payload()
+        del payload["id_field"]
+
         with self.assertRaises(ValidationError):
-            RawEvent(**self._valid_payload(source="bitbucket"))
+            SourceYamlEntry(**payload)
+
+
+class TestEventModel(unittest.TestCase):
+
+    def test_valid_payload_creates_instance(self):
+        event = EventModel(id="1", type="PushEvent")
+        self.assertEqual(event.id, "1")
+        self.assertEqual(event.type, "PushEvent")
+
+    def test_missing_required_field_raises_validation_error(self):
+        with self.assertRaises(ValidationError):
+            EventModel(id="1")
+
+    def test_extra_fields_are_preserved(self):
+        event = EventModel(id="1", type="PushEvent", actor={"login": "octocat"})
+        self.assertEqual(event.model_dump()["actor"], {"login": "octocat"})
+
+
+class TestGetSourceConfig(unittest.TestCase):
+
+    def test_returns_config_for_github(self):
+        config = get_source_config("github")
+
+        self.assertEqual(config.source, "github")
+        self.assertEqual(config.endpoints["default"], "https://api.github.com/events")
+        self.assertEqual(config.id_field, "id")
+        self.assertEqual(config.type_field, "type")
+
+    def test_returns_config_for_gitlab(self):
+        config = get_source_config("gitlab")
+
+        self.assertEqual(config.endpoints["default"], "https://gitlab.com")
+        self.assertEqual(config.id_field, "id")
+        self.assertEqual(config.type_field, "object_kind")
+
+    def test_raises_not_implemented_for_unknown_source(self):
+        with self.assertRaises(NotImplementedError):
+            get_source_config("bitbucket")
+
+    def test_config_is_immutable(self):
+        config = get_source_config("github")
+
+        with self.assertRaises(Exception):
+            config.url = "https://example.com"
+
+
+class TestSourceConfigUrlResolution(unittest.TestCase):
+
+    def _url(self, endpoint=None, endpoint_params=None):
+        return get_source_config("github", endpoint, endpoint_params).url
+
+    def test_omitted_endpoint_falls_back_to_default_variant(self):
+        config = get_source_config("github")
+
+        self.assertEqual(config.variant, "default")
+        self.assertEqual(config.url, "https://api.github.com/events")
+
+    def test_explicit_default_endpoint_returns_events_url(self):
+        self.assertEqual(self._url("default"), "https://api.github.com/events")
+
+    def test_network_endpoint_with_owner_and_repo(self):
+        self.assertEqual(
+            self._url("network", {"owner": "kubernetes", "repo": "kubernetes"}),
+            "https://api.github.com/networks/kubernetes/kubernetes/events",
+        )
+
+    def test_organization_endpoint_with_org(self):
+        self.assertEqual(
+            self._url("organization", {"org": "anthropics"}),
+            "https://api.github.com/orgs/anthropics/events",
+        )
+
+    def test_unknown_endpoint_variant_raises_value_error(self):
+        with self.assertRaises(ValueError) as context:
+            self._url("does-not-exist")
+
+        self.assertIn("Unsupported endpoint", str(context.exception))
+
+    def test_missing_endpoint_param_raises_value_error(self):
+        with self.assertRaises(ValueError) as context:
+            self._url("network", {"owner": "kubernetes"})
+
+        self.assertIn("repo", str(context.exception))
+
+    def test_no_endpoint_params_for_parameterized_variant_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            self._url("organization")
+
+    def test_extra_endpoint_params_are_ignored(self):
+        self.assertEqual(
+            self._url("organization", {"org": "anthropics", "owner": "unused"}),
+            "https://api.github.com/orgs/anthropics/events",
+        )
+
+
+class TestSourceConfigAccessors(unittest.TestCase):
+
+    def _config(self, id_field="id", type_field="type"):
+        return SourceConfig(
+            source="github",
+            endpoints={"default": "https://api.github.com/events"},
+            headers={
+                "rate_limit_remaining": "X-RateLimit-Remaining",
+                "rate_limit_reset": "X-RateLimit-Reset",
+            },
+            id_field=id_field,
+            type_field=type_field,
+            variant="default",
+            url="https://api.github.com/events",
+        )
+
+    def test_get_event_id_and_type_from_flat_path(self):
+        config = self._config()
+        event = {"id": "1", "type": "PushEvent"}
+
+        self.assertEqual(config.get_event_id(event), "1")
+        self.assertEqual(config.get_event_type(event), "PushEvent")
+
+    def test_get_event_value_from_nested_path(self):
+        config = self._config(id_field="meta.event.id")
+        event = {"meta": {"event": {"id": "42"}}}
+
+        self.assertEqual(config.get_event_id(event), "42")
+
+    def test_unresolvable_path_raises_value_error(self):
+        config = self._config(id_field="meta.missing")
+
+        with self.assertRaises(ValueError) as context:
+            config.get_event_id({"meta": {"event": {"id": "42"}}})
+
+        self.assertIn("meta.missing", str(context.exception))
+
+    def test_path_through_non_dict_raises_value_error(self):
+        config = self._config(id_field="id.nested")
+
+        with self.assertRaises(ValueError):
+            config.get_event_id({"id": "1"})
+
+    def test_rate_limit_header_properties(self):
+        config = self._config()
+
+        self.assertEqual(config.rate_limit_remaining, "X-RateLimit-Remaining")
+        self.assertEqual(config.rate_limit_reset, "X-RateLimit-Reset")
 
 
 if __name__ == "__main__":

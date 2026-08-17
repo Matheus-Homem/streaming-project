@@ -1,123 +1,118 @@
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Callable, Union
+from functools import lru_cache
+from pathlib import Path
+from string import Formatter
 
-from pydantic import BaseModel
+import yaml
+from pydantic import BaseModel, ConfigDict
 
-
-class ExtractionType(Enum):
-    ALL_EVENTS = "all_events"
-    NETWORK_EVENTS = "network_events"
-    ORGANIZATION_EVENTS = "organization_events"
-
-
-class GitLabEventType(str, Enum):
-    JOB = "Job Hook"
-    PUSH = "Push Hook"
-    ISSUE = "Issue Hook"
-    EMOJI = "Emoji Hook"
-    RELEASE = "Release Hook"
-    SUBGROUP = "Subgroup Hook"
-    TAG_PUSH = "Tag Push Hook"
-    PIPELINE = "Pipeline Hook"
-    ISSUE_COMMENT = "Note Hook"
-    WIKI_PAGE = "Wiki Page Hook"
-    MILESTONE = "Milestone Hook"
-    DEPLOYMENT = "Deployment Hook"
-    FEATURE_FLAG = "Feature Flag Hook"
-    ACCESS_TOKEN = "Access Token Hook"
-    GROUP_MEMBER = "Group Member Hook"
-    MERGE_REQUEST = "Merge Request Hook"
-    VULNERABILITY = "Vulnerability Hook"
-
-
-class GitHubEventType(str, Enum):
-    FORK = "ForkEvent"
-    PUSH = "PushEvent"
-    WATCH = "WatchEvent"
-    CREATE = "CreateEvent"
-    DELETE = "DeleteEvent"
-    GOLLUM = "GollumEvent"
-    ISSUES = "IssuesEvent"
-    MEMBER = "MemberEvent"
-    PUBLIC = "PublicEvent"
-    RELEASE = "ReleaseEvent"
-    DISCUSSION = "DiscussionEvent"
-    SPONSORSHIP = "SponsorshipEvent"
-    PULL_REQUEST = "PullRequestEvent"
-    ISSUE_COMMENT = "IssueCommentEvent"
-    COMMIT_COMMENT = "CommitCommentEvent"
-    PULL_REQUEST_REVIEW = "PullRequestReviewEvent"
-    PULL_REQUEST_REVIEW_COMMENT = "PullRequestReviewCommentEvent"
-
-
-class SourceType(str, Enum):
-    GITHUB = "github"
-    GITLAB = "gitlab"
+DEFAULT_ENDPOINT_VARIANT = "default"
 
 
 class EventModel(BaseModel):
-    """
-    Modelo de evento.
-    """
-
-
-class GitHubEvent(EventModel):
+    model_config = ConfigDict(extra="allow")
     id: str
-    type: GitHubEventType
-    actor: dict[str, Any]
-    repo: dict[str, Any]
-    payload: dict[str, Any]
-    public: bool
-    created_at: str
-    org: dict[str, Any] = None
+    type: str
 
 
-class GitLabEvent(EventModel):
-    id: str
-
-
-class RawEvent(BaseModel):
-    source: SourceType
-    source_event_id: str
-    source_event_type: Union[GitHubEventType, GitLabEventType]
-    observed_at: str
-    schema_version: int
-    payload: dict[str, Any]
+class SourceYamlEntry(BaseModel):
+    endpoints: dict[str, str]
+    headers: dict[str, str]
+    id_field: str
+    type_field: str
 
 
 @dataclass(frozen=True)
 class SourceConfig:
-    events_url: str
-    network_events_url: Callable[[str, str], str]
-    organization_events_url: Callable[[str], str]
-    event_model: EventModel
-    rate_limit_remaining: str
-    rate_limit_reset: str
+    source: str
+    endpoints: dict[str, str]
+    headers: dict[str, str]
+    id_field: str
+    type_field: str
+    variant: str
+    url: str
+
+    def get_event_id(self, event: dict) -> str:
+        return self._get_nested_value(event, self.id_field)
+
+    def get_event_type(self, event: dict) -> str:
+        return self._get_nested_value(event, self.type_field)
+
+    @staticmethod
+    def _get_nested_value(event: dict, path: str):
+        value = event
+        for key in path.split("."):
+            if not isinstance(value, dict) or key not in value:
+                raise ValueError(f"Could not resolve path '{path}' in event")
+            value = value[key]
+        return value
+
+    @property
+    def rate_limit_remaining(self) -> str:
+        return self.headers["rate_limit_remaining"]
+
+    @property
+    def rate_limit_reset(self) -> str:
+        return self.headers["rate_limit_reset"]
 
 
-SOURCE_REGISTRY: dict[SourceType, SourceConfig] = {
-    SourceType.GITHUB: SourceConfig(
-        events_url="https://api.github.com/events",
-        network_events_url=lambda owner, repo: f"https://api.github.com/networks/{owner}/{repo}/events",
-        organization_events_url=lambda org: f"https://api.github.com/orgs/{org}/events",
-        event_model=GitHubEvent,
-        rate_limit_remaining="X-RateLimit-Remaining",
-        rate_limit_reset="X-RateLimit-Reset",
-    ),
-    SourceType.GITLAB: SourceConfig(
-        events_url="https://gitlab.com",
-        network_events_url=lambda owner, repo: f"https://gitlab.com{owner}/{repo}/events",
-        organization_events_url=lambda org: f"https://gitlab.com/{org}/events",
-        event_model=GitLabEvent,
-        rate_limit_remaining="RateLimit-Remaining",
-        rate_limit_reset="RateLimit-Reset",
-    ),
-}
+@lru_cache(maxsize=1)
+def _load_yaml_config() -> dict[str, SourceYamlEntry]:
+    config_path = Path(__file__).parent / "config" / "sources.yml"
+    with config_path.open() as file:
+        config = yaml.safe_load(file)
+
+    return {
+        source_name: SourceYamlEntry.model_validate(source_config)
+        for source_name, source_config in config.items()
+    }
 
 
-def get_source_config(source: SourceType) -> SourceConfig:
+def _resolve_url(
+    source: str,
+    endpoints: dict[str, str],
+    variant: str,
+    endpoint_params: dict[str, str],
+) -> str:
     try:
-        return SOURCE_REGISTRY[source]
+        template = endpoints[variant]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported endpoint '{variant}' for source '{source}'. "
+            f"Available endpoints: {sorted(endpoints)}"
+        )
+
+    required_params = {
+        field_name for _, field_name, _, _ in Formatter().parse(template) if field_name
+    }
+    missing_params = required_params - endpoint_params.keys()
+    if missing_params:
+        raise ValueError(
+            f"Missing endpoint parameters for '{source}.{variant}': "
+            f"{sorted(missing_params)}"
+        )
+
+    return template.format(**endpoint_params)
+
+
+def get_source_config(
+    source: str,
+    endpoint: str | None = None,
+    endpoint_params: dict[str, str] | None = None,
+) -> SourceConfig:
+    try:
+        entry = _load_yaml_config()[source]
     except KeyError:
         raise NotImplementedError(f"Unsupported source: {source}")
+
+    variant = endpoint or DEFAULT_ENDPOINT_VARIANT
+
+    return SourceConfig(
+        source=source,
+        endpoints=entry.endpoints,
+        headers=entry.headers,
+        id_field=entry.id_field,
+        type_field=entry.type_field,
+        variant=variant,
+        url=_resolve_url(source, entry.endpoints, variant, endpoint_params or {}),
+    )
