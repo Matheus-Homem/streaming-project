@@ -1,9 +1,11 @@
 import unittest
 from unittest.mock import Mock, call
 
-from ingestion.adapters.client import IngestionClientBase
-from ingestion.adapters.engine import IngestionEngineBase
-from ingestion.adapters.producer import IngestionProducerBase
+from ingestion.ports import (
+    IngestionClientBase,
+    IngestionEngineBase,
+    IngestionProducerBase,
+)
 from ingestion.use_case import IngestionPipeline
 from ingestion.utils import BoundedUniqueTracker
 
