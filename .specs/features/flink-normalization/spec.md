@@ -17,8 +17,8 @@
 | ------- | ------ |
 | Aggregation / windowing over `events-normalized` | Separate future feature; this feature only produces the normalized stream it will consume |
 | OpenSearch + Grafana | Separate future feature; unaffected by this one |
-| GitLab ingestion wiring | Still a stub (`GitLabEvent(id: str)` only, no client/engine path); unaffected here |
-| Non-VCS API sources (weather, financial/monetary, etc.) | `AD-004` (`.specs/STATE.md`) records the architectural intent to stay pluggable for this, but no additional source is implemented in this feature - GitHub is the only concrete `Normalizer` built now |
+| GitLab ingestion wiring | Still a stub (a `gitlab` entry in `ingestion/config/sources.yml`, no client/engine run exercised); unaffected here |
+| Non-VCS API sources (weather, financial/monetary, etc.) | `AD-004`/`AD-006` (`.specs/STATE.md`) record the architectural intent to stay pluggable for this, but no additional source is declared in this feature - GitHub is the only normalization contract authored now. Under `AD-006` adding one is a YAML file, not a code change |
 | Flink job resilience / checkpointing hardening (restart strategies, exactly-once tuning) | Mirrors how `streaming-ingestion`'s resilience work was its own P2 after the initial P1; deferred to a future feature once the job exists to harden |
 | Kubernetes / Drone / Terraform | RFC marks these "if there's an opportunity" - not tied to this feature. `AD-005` (`.specs/STATE.md`) records the concrete trigger conditions identified for each (K8s: local stack outgrowing Compose orchestration - plausible once this feature and OpenSearch/Grafana land; Terraform: only if the project provisions real AWS free-tier resources) and reserves `infra/k8s/`/`infra/terraform/` as their landing paths, but neither is adopted by this feature |
 
@@ -33,13 +33,13 @@
 | Kafka topic provisioning | Explicit creation via docker-compose for both `events-raw` and `events-normalized`, replacing broker auto-creation | User wants the cluster formalized instead of "however auto-creation happened to configure it" | y |
 | Topic config (partitions / replication / retention) | 3 partitions, replication factor 3, 7-day retention, for both topics | Matches the existing 3-broker cluster; a reasonable, easily-revised local-dev default | n |
 | Ingestion service runtime | New docker-compose service (own Dockerfile); `make ingestion-default` also stays working outside compose | Flink needs continuous live data to consume; keeping the manual path avoids losing a simple debug workflow | y |
-| Normalization depth | Full per-`GitHubEventType` flattening with a curated subset per nested object (not full recursive flatten, not envelope-only) | User's explicit choice - more thorough than MVP-minimal, but noise fields (`avatar_url`, `gravatar_id`, redundant `*_url`) are dropped | y |
+| Normalization depth | Full per-event-type flattening with a curated subset per nested object (not full recursive flatten, not envelope-only) | User's explicit choice - more thorough than MVP-minimal, but noise fields (`avatar_url`, `gravatar_id`, redundant `*_url`) are dropped | y |
 | Timestamp representation | `event_time`/`ingested_at` as epoch milliseconds in the normalized schema | Flink event-time/watermarks work natively with epoch millis; resolves this before the next feature (windowed aggregation) needs it | y |
 | Partition key | `partition_key` = `repo_name` | Resolves the message-key item `streaming-ingestion/spec.md` explicitly deferred "before Flink windowing... relies on ordering per key" | y |
-| Normalizer architecture | Pluggable `Normalizer` port (ABC), `GitHubNormalizer` as the sole concrete implementation; normalized schema splits into a domain-neutral envelope + a GitHub-specific fields block | Driven by the user's long-term API-agnostic-platform intent; formalized project-wide as `AD-004` in `.specs/STATE.md`, not just a local choice | y |
+| Normalizer architecture | **Revised 2026-08-17 (`AD-006`)**: contract-driven. A single source-agnostic `ContractNormalizer` interprets a YAML contract per source; the `Normalizer` port (ABC) is retained as the escape hatch for a source too irregular for a contract. Normalized schema still splits into a domain-neutral envelope + a source-specific fields block | Driven by the user's long-term API-agnostic-platform intent. `AD-004` set the pluggability principle; `AD-006` sets the authoring medium - users declare sources in data, never in Python. See `.specs/PLATFORM.md` | y |
 | Field-naming convention for the GitHub-specific block | No per-field source prefix (e.g. `repo_id`, not `github_repo_id`); the block as a whole is understood as GitHub-specific because only one source exists today | Simplicity over speculative collision-avoidance; revisit if/when a second real source shares the topic | n |
 | Fallback for the 6 not-yet-mapped event types | Envelope populated, GitHub-specific fields block empty/null; event still published, not dropped | Avoids silent data loss while mapping coverage is incomplete, matching the "don't lose data" bias already in `ingestion/adapters/engine.py` | n |
-| Malformed message / unknown `schema_version` handling | Log and skip, job keeps running | Mirrors `ingestion/adapters/engine.py`'s existing pattern for invalid `GitHubEvent` payloads | n |
+| Malformed message / unknown `schema_version` handling | Log and skip, job keeps running | Mirrors `ingestion/adapters/engine.py`'s existing pattern for payloads that fail validation | n |
 | Processing semantics | At-least-once is sufficient | The normalizer is a stateless map; reprocessing the same message yields the same output. Exactly-once deferred to stateful aggregation | n |
 | `CreateEvent`'s `full_ref` field | Excluded from the curated mapping | Appeared in the one doc source consulted but wasn't independently corroborated, and the same doc source already proved incomplete for `PushEvent`; excluding avoids propagating a possibly-fabricated field | n |
 
@@ -105,31 +105,39 @@
 
 ### Normalization Mapping (referenced by P1: GitHub event normalization, AC1)
 
+> **Path notation (revised 2026-08-17, `AD-006`).** Sources below are written as the paths a
+> normalization contract declares, evaluated against `RawEvent.payload` - which holds the whole source
+> event dict. So `actor`, `repo`, `org`, `created_at`, and `public` sit at the root, while GitHub's own
+> nested payload object is reached as `payload.<...>`. The earlier `GitHubEvent.x` notation referred to
+> a Pydantic class removed by `refactor/yaml-driven-source-config` (PR #5); the *shape* is unchanged,
+> only the notation. Fields sourced from the pipeline envelope rather than the payload are marked
+> `RawEvent.x` and are populated by the normalizer itself, not by a contract rule.
+
 **Domain-Neutral Envelope** (every normalized event, regardless of source):
 
 | Field | Type | Source |
 | --- | --- | --- |
-| `source` | string | `RawEvent.source` |
-| `event_id` | string | `RawEvent.source_event_id` |
-| `event_type` | string | `RawEvent.source_event_type` |
-| `actor_id` | integer | `GitHubEvent.actor.id` |
-| `actor_login` | string | `GitHubEvent.actor.login` |
-| `event_time` | long (epoch millis) | `GitHubEvent.created_at`, converted |
-| `ingested_at` | long (epoch millis) | `RawEvent.observed_at`, converted |
+| `source` | string | `RawEvent.source` (envelope, not a contract rule) |
+| `event_id` | string | `RawEvent.source_event_id` (envelope) |
+| `event_type` | string | `RawEvent.source_event_type` (envelope) |
+| `actor_id` | integer | `actor.id` |
+| `actor_login` | string | `actor.login` |
+| `event_time` | long (epoch millis) | `created_at`, converted (`as: timestamp`) |
+| `ingested_at` | long (epoch millis) | `RawEvent.observed_at`, converted (envelope) |
 | `schema_version` | integer | `1` (normalized schema's own version, independent of `RawEvent.schema_version`) |
-| `partition_key` | string | See per-source rule (GitHub: `repo_name`) |
+| `partition_key` | string | Per-source contract rule (GitHub: `repo.name`) |
 
-**GitHub-specific fields block** (common to all 17 `GitHubEventType` values - `actor`/`repo`/`org` are top-level on `GitHubEvent`, not inside `payload`):
+**GitHub-specific fields block** (common to all 17 GitHub event types - `actor`/`repo`/`org` are at the payload root, not inside the nested `payload` object):
 
 | Field | Type | Source |
 | --- | --- | --- |
-| `repo_id` | integer | `GitHubEvent.repo.id` |
-| `repo_name` | string | `GitHubEvent.repo.name` |
-| `org_id` | integer, nullable | `GitHubEvent.org.id` |
-| `org_login` | string, nullable | `GitHubEvent.org.login` |
-| `public` | boolean | `GitHubEvent.public` |
+| `repo_id` | integer | `repo.id` |
+| `repo_name` | string | `repo.name` |
+| `org_id` | integer, nullable | `org.id` |
+| `org_login` | string, nullable | `org.login` |
+| `public` | boolean | `public` |
 
-**Per-type curated fields** (from `GitHubEvent.payload`, the only part of the shape that varies by type):
+**Per-type curated fields** (from the nested `payload` object, the only part of the shape that varies by type):
 
 | `source_event_type` | Source of mapping | Curated fields (from `payload`) |
 | --- | --- | --- |
@@ -171,7 +179,7 @@
 - IF `owner`/`repo`/`org` combinations or other ingestion-side concerns arise THEN they're out of this feature's scope - covered by `streaming-ingestion/spec.md` (ING-04)
 - IF a message's `schema_version` is not `1` THEN the job SHALL log and skip it (covered, P1 Normalization AC6)
 - IF a message is not valid JSON THEN the job SHALL log and skip it (covered, same AC6)
-- IF `GitHubEvent.org` is absent (private profile or org-less actor) THEN `org_id`/`org_login` SHALL be null in the normalized event, not omitted or fatal (covered, GitHub-specific fields block table)
+- IF `org` is absent from the payload (private profile or org-less actor) THEN `org_id`/`org_login` SHALL be null in the normalized event, not omitted or fatal (covered, GitHub-specific fields block table)
 - IF an event's `source_event_type` isn't yet in the Normalization Mapping table THEN the event SHALL still publish with an empty GitHub-specific block, not be dropped (covered, P1 Normalization AC5)
 - IF `SponsorshipEvent` traffic never appears during the P2 sample-capture window THEN it MAY stay on the empty-fallback path indefinitely, explicitly documented as a known gap (covered, P2 AC4)
 
