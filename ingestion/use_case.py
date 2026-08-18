@@ -4,7 +4,7 @@ from ingestion.ports import (
     IngestionClientBase,
     IngestionEngineBase,
     IngestionProducerBase,
-    UniqueTrackerBase,
+    IngestionTrackerBase,
 )
 
 
@@ -15,7 +15,7 @@ class IngestionPipeline:
         client: IngestionClientBase,
         engine: IngestionEngineBase,
         producer: IngestionProducerBase,
-        tracker: UniqueTrackerBase,
+        tracker: IngestionTrackerBase,
     ):
         self.logger = getLogger(self.__class__.__name__)
         self.client = client
