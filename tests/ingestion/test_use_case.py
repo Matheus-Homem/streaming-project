@@ -7,7 +7,7 @@ from ingestion.ports import (
     IngestionProducerBase,
 )
 from ingestion.use_case import IngestionPipeline
-from ingestion.utils import BoundedUniqueTracker
+from ingestion.adapters import IngestionTracker
 
 
 class TestIngestionPipeline(unittest.TestCase):
@@ -16,7 +16,7 @@ class TestIngestionPipeline(unittest.TestCase):
         self.client_mock = Mock(spec=IngestionClientBase)
         self.engine_mock = Mock(spec=IngestionEngineBase)
         self.producer_mock = Mock(spec=IngestionProducerBase)
-        self.tracker_mock = Mock(spec=BoundedUniqueTracker)
+        self.tracker_mock = Mock(spec=IngestionTracker)
         self.pipeline = IngestionPipeline(
             client=self.client_mock,
             engine=self.engine_mock,

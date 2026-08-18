@@ -3,7 +3,7 @@ from collections import deque
 from ingestion.ports import UniqueTrackerBase
 
 
-class BoundedUniqueTracker(UniqueTrackerBase):
+class IngestionTracker(UniqueTrackerBase):
 
     def __init__(self, max_size: int):
         self.deque = deque(maxlen=max_size)

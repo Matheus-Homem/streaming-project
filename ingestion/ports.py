@@ -61,3 +61,4 @@ class UniqueTrackerBase(ABC):
         Args:
             value (str): Value to record.
         """
+
