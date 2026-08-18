@@ -5,14 +5,15 @@ from unittest.mock import Mock, patch
 from kafka.errors import KafkaError
 
 from ingestion.adapters.producer import IngestionProducer, JsonSerializer
-from ingestion.models import GitHubEventType, RawEvent, SourceType
+from shared.models import RawEvent
 
 
 def _raw_event(event_id="1"):
     return RawEvent(
-        source=SourceType.GITHUB,
+        source="github",
         source_event_id=event_id,
-        source_event_type=GitHubEventType.PUSH,
+        source_event_endpoint="default",
+        source_event_type="PushEvent",
         observed_at="2026-08-01T12:00:00",
         schema_version=1,
         payload={"id": event_id},

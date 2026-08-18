@@ -3,8 +3,8 @@ from logging import getLogger
 
 from dotenv import load_dotenv
 
-import ingestion.adapters as ing
-from ingestion.models import SourceType
+from ingestion.adapters import IngestionClient, IngestionEngine, IngestionProducer
+from ingestion.models import SourceConfig, get_source_config
 from ingestion.use_case import IngestionPipeline
 from ingestion.utils import BoundedUniqueTracker, RateLimitError, RetryTimer
 from shared.logger import setup_logging
@@ -19,17 +19,20 @@ def build_arguments():
     parser.add_argument(
         "--source",
         required=True,
-        choices=["github", "gitlab"],
         help="Data source (Required)",
     )
     parser.add_argument(
-        "--owner", required=False, default=None, help="Repository owner (Optional)"
+        "--endpoint",
+        required=False,
+        default=None,
+        help="Endpoint variant (Optional)",
     )
     parser.add_argument(
-        "--repo", required=False, default=None, help="Repository name (Optional)"
-    )
-    parser.add_argument(
-        "--org", required=False, default=None, help="Organization name (Optional)"
+        "--param",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Endpoint parameter (can be specified multiple times)",
     )
     parser.add_argument(
         "--poll-interval",
@@ -42,17 +45,27 @@ def build_arguments():
     return parser.parse_args()
 
 
-def configure_ingestion_pipeline(
-    source_type: SourceType,
-    owner: str = None,
-    repo: str = None,
-    org: str = None,
-) -> IngestionPipeline:
+def parse_endpoint_params(params: list[str]) -> dict[str, str]:
+    result = {}
+    for param in params:
+        key, separator, value = param.partition("=")
+        if not separator:
+            raise ValueError(
+                f"Invalid endpoint parameter: {param!r}. " "Expected KEY=VALUE."
+            )
+        result[key] = value
+
+    return result
+
+
+def configure_ingestion_pipeline(source_config: SourceConfig) -> IngestionPipeline:
     return IngestionPipeline(
-        client=ing.IngestionClient(source_type, owner, repo, org),
-        engine=ing.IngestionEngine(source_type),
-        producer=ing.IngestionProducer(),
-        tracker=BoundedUniqueTracker(120), #  Cover 4 polls with 30 events/poll, which is the window that the API tend to resend the same event
+        client=IngestionClient(source_config),
+        engine=IngestionEngine(source_config),
+        producer=IngestionProducer(),
+        tracker=BoundedUniqueTracker(
+            120
+        ),  # Cover 4 polls with 30 events/poll, which is the window that the API tend to resend the same event
     )
 
 
@@ -60,17 +73,21 @@ def main():
     logger = getLogger("Application")
     args = build_arguments()
     logger.info(
-        f"Starting application with parameters source={args.source}, owner={args.owner}, repo={args.repo}, org={args.org}, poll_interval={args.poll_interval}"
+        f"Starting application for source={args.source} with poll_interval={args.poll_interval}"
     )
     timer = RetryTimer(int(args.poll_interval))
-    source_enum = SourceType(args.source)
+    source_type = args.source
 
-    ingestion_pipeline = configure_ingestion_pipeline(
-        source_type=source_enum,
-        owner=args.owner,
-        repo=args.repo,
-        org=args.org,
+    source_config = get_source_config(
+        source=source_type,
+        endpoint=args.endpoint,
+        endpoint_params=parse_endpoint_params(args.param),
     )
+    logger.info(
+        f"Using endpoint '{source_config.variant}' resolved to '{source_config.url}'"
+    )
+
+    ingestion_pipeline = configure_ingestion_pipeline(source_config)
 
     while True:
         try:
@@ -79,12 +96,12 @@ def main():
             timer.reset().sleep()
         except RateLimitError as e:
             logger.warning(
-                f"Extraction from {source_enum.value.upper()} reached rate-limit: {e}"
+                f"Extraction from {source_type.upper()} reached rate-limit: {e}"
             )
             timer.schedule_sleep(e.reset_at).reset()
         except Exception:
             logger.error(
-                f"Extraction from {source_enum.value.upper()} finished with unexpected errors"
+                f"Extraction from {source_type.upper()} finished with unexpected errors"
             )
             logger.error(f"Sleeping for {timer} seconds")
             timer.sleep().increase()
