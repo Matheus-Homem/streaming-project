@@ -16,6 +16,7 @@
 
 # Temporary Files
 tmp/
+*_sample.*
 *.pyc
 __pycache__/
 
