@@ -6,8 +6,10 @@
 .vscode/
 
 # AI
-.claude/
 .agents/
+.claude/skills/
+.claude/commands/
+.claude/settings.json
 
 # Test Cache
 .coverage
