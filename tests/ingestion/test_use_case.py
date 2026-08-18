@@ -1,13 +1,13 @@
 import unittest
 from unittest.mock import Mock, call
 
+from ingestion.adapters import IngestionTracker
 from ingestion.ports import (
     IngestionClientBase,
     IngestionEngineBase,
     IngestionProducerBase,
 )
 from ingestion.use_case import IngestionPipeline
-from ingestion.adapters import IngestionTracker
 
 
 class TestIngestionPipeline(unittest.TestCase):
