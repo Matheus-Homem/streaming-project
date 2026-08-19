@@ -36,7 +36,7 @@
 | Normalization depth | Full per-event-type flattening with a curated subset per nested object (not full recursive flatten, not envelope-only) | User's explicit choice - more thorough than MVP-minimal, but noise fields (`avatar_url`, `gravatar_id`, redundant `*_url`) are dropped | y |
 | Timestamp representation | `event_time`/`ingested_at` as epoch milliseconds in the normalized schema | Flink event-time/watermarks work natively with epoch millis; resolves this before the next feature (windowed aggregation) needs it | y |
 | Partition key | `partition_key` = `repo_name` | Resolves the message-key item `streaming-ingestion/spec.md` explicitly deferred "before Flink windowing... relies on ordering per key" | y |
-| Normalizer architecture | **Revised 2026-08-17 (`AD-006`)**: contract-driven. A single source-agnostic `ContractNormalizer` interprets a YAML contract per source; the `Normalizer` port (ABC) is retained as the escape hatch for a source too irregular for a contract. Normalized schema still splits into a domain-neutral envelope + a source-specific fields block | Driven by the user's long-term API-agnostic-platform intent. `AD-004` set the pluggability principle; `AD-006` sets the authoring medium - users declare sources in data, never in Python. See `.specs/PLATFORM.md` | y |
+| Normalizer architecture | **Revised 2026-08-17 (`AD-006`)**: contract-driven. A single source-agnostic `NormalizationEngine` interprets a YAML contract per source; the `Normalizer` port (ABC) is retained as the escape hatch for a source too irregular for a contract. Normalized schema still splits into a domain-neutral envelope + a source-specific fields block | Driven by the user's long-term API-agnostic-platform intent. `AD-004` set the pluggability principle; `AD-006` sets the authoring medium - users declare sources in data, never in Python. See `.specs/PLATFORM.md` | y |
 | Field-naming convention for the GitHub-specific block | No per-field source prefix (e.g. `repo_id`, not `github_repo_id`); the block as a whole is understood as GitHub-specific because only one source exists today | Simplicity over speculative collision-avoidance; revisit if/when a second real source shares the topic | n |
 | Fallback for the 6 not-yet-mapped event types | Envelope populated, GitHub-specific fields block empty/null; event still published, not dropped | Avoids silent data loss while mapping coverage is incomplete, matching the "don't lose data" bias already in `ingestion/adapters/engine.py` | n |
 | Malformed message / unknown `schema_version` handling | Log and skip, job keeps running | Mirrors `ingestion/adapters/engine.py`'s existing pattern for payloads that fail validation | n |
@@ -97,9 +97,9 @@
 4. `event_time` (from the source `created_at`) and `ingested_at` (from the source `observed_at`) SHALL be epoch-millisecond integers, converted from the source `RawEvent`'s ISO 8601 strings.
 5. IF a message's `source_event_type` is one of the 6 types not yet in the Normalization Mapping table (`PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, `SponsorshipEvent`) THEN the job SHALL still publish a normalized event with the Domain-Neutral Envelope populated and the GitHub-specific fields block empty/null, rather than dropping the event.
 6. IF a message fails to deserialize as valid JSON, is missing a required envelope field, or has a `schema_version` other than `1` THEN the job SHALL log the failure (including `event_id` when parseable) and skip that message without stopping the job.
-7. The job SHALL reach all GitHub-specific field extraction through a `Normalizer` interface, with `GitHubNormalizer` as its sole concrete implementation - the job's core pipeline SHALL NOT contain GitHub-specific branching itself (`AD-004`).
+7. The job SHALL reach all GitHub-specific field extraction through the `NormalizationEngineBase` port, satisfied by the single source-agnostic `NormalizationEngine` reading a per-source declarative contract - the job's core pipeline SHALL NOT contain GitHub-specific branching itself (`AD-004`). **Revised 2026-08-19**: the original wording named `GitHubNormalizer` as the sole concrete implementation, which `AD-006` superseded - GitHub knowledge now lives entirely in `flink/normalization/config/sources/github.yml`, and no GitHub-named Python class exists. The requirement (no source-specific branching in the pipeline) is unchanged and is enforced by a test asserting the module contains no GitHub vocabulary.
 
-**Independent Test**: Feed each of the 11 mapped event types (from `tmp/event_sample.json` where available, hand-built fixtures otherwise) through the job and confirm the published `events-normalized` message matches its table row exactly; feed one of the 6 unmapped types and confirm it publishes with an empty GitHub-specific block instead of being dropped; feed a malformed message and confirm it's logged and skipped without crashing the job.
+**Independent Test**: Feed each of the 11 mapped event types (from `flink/normalization/event_sample.json` where available, hand-built fixtures otherwise) through the job and confirm the published `events-normalized` message matches its table row exactly; feed one of the 6 unmapped types and confirm it publishes with an empty GitHub-specific block instead of being dropped; feed a malformed message and confirm it's logged and skipped without crashing the job.
 
 ---
 
@@ -141,7 +141,7 @@
 
 | `source_event_type` | Source of mapping | Curated fields (from `payload`) |
 | --- | --- | --- |
-| `IssueCommentEvent` | Verified (`tmp/event_sample.json`) | `action`; `issue_id`, `issue_number`, `issue_title`, `issue_state`, `issue_created_at`, `issue_updated_at`, `issue_comments_count` (from `issue.comments`), `issue_is_pull_request` (bool: `issue.pull_request` key present), `issue_user_login`, `issue_labels` (list of `issue.labels[].name`); `comment_id`, `comment_body`, `comment_user_login`, `comment_created_at`, `comment_updated_at` |
+| `IssueCommentEvent` | Verified (`flink/normalization/event_sample.json`) | `action`; `issue_id`, `issue_number`, `issue_title`, `issue_state`, `issue_created_at`, `issue_updated_at`, `issue_comments_count` (from `issue.comments`), `issue_is_pull_request` (bool: `issue.pull_request` key present), `issue_user_login`, `issue_labels` (list of `issue.labels[].name`); `comment_id`, `comment_body`, `comment_user_login`, `comment_created_at`, `comment_updated_at` |
 | `PullRequestEvent` | Verified | `action`, `pr_number`, `pr_id`; `pr_base_ref`, `pr_base_sha`, `pr_base_repo_id`, `pr_base_repo_name`; `pr_head_ref`, `pr_head_sha`, `pr_head_repo_id`, `pr_head_repo_name`; `label_name` (nullable, from `payload.label.name`), `labels` (list of `payload.labels[].name`) |
 | `PullRequestReviewEvent` | Verified | `action`, `pr_number`, `pr_id`, `pr_base_ref`, `pr_head_ref`; `review_id`, `review_state`, `review_body`, `review_submitted_at`, `review_user_login` |
 | `PullRequestReviewCommentEvent` | Verified | `action`, `pr_number`, `pr_id`, `pr_base_ref`, `pr_head_ref`; `comment_id`, `comment_body`, `comment_path`, `comment_position`, `comment_diff_hunk`, `comment_commit_id`, `comment_created_at`, `comment_updated_at`, `comment_user_login` |
@@ -165,9 +165,9 @@
 
 **Acceptance Criteria**:
 
-1. The developer SHALL capture a real-traffic sample containing at least one instance of each of the 6 remaining event types, using the same method that produced `tmp/event_sample.json`.
+1. The developer SHALL capture a real-traffic sample containing at least one instance of each of the 6 remaining event types, using the same method that produced `flink/normalization/event_sample.json`.
 2. WHEN the sample confirms a type's real payload shape THEN the Normalization Mapping table SHALL be extended with that type's curated fields, following the same noise-filtering convention as the 11 already-mapped types (drop `avatar_url`, `gravatar_id`, redundant `*_url` fields; keep identifying/content fields).
-3. WHEN `GitHubNormalizer` is updated for a newly-mapped type THEN messages of that type SHALL stop falling into the P1 AC5 empty-fallback path and SHALL produce populated GitHub-specific fields.
+3. WHEN the GitHub contract gains an `event_types` entry for a newly-mapped type THEN messages of that type SHALL stop falling into the P1 AC5 empty-fallback path and SHALL produce populated GitHub-specific fields.
 4. IF real-traffic capture does not yield a `SponsorshipEvent` sample within a reasonable observation window (GitHub Sponsors events are rare on the public feed) THEN that type MAY remain on the empty-envelope fallback, documented as a known gap rather than blocking the rest of this story.
 
 **Independent Test**: For each of the 6 types, feed a captured real sample through the updated job and confirm the published `events-normalized` message has populated (non-null) GitHub-specific fields instead of falling into the empty-fallback path.
@@ -200,7 +200,7 @@
 | FLK-09 | P1: GitHub event normalization (timestamp conversion) | - | Pending |
 | FLK-10 | P1: GitHub event normalization (unmapped-type fallback) | - | Pending |
 | FLK-11 | P1: GitHub event normalization (malformed-message handling) | - | Pending |
-| FLK-12 | P1: GitHub event normalization (pluggable Normalizer architecture) | - | Pending |
+| FLK-12 | P1: GitHub event normalization (pluggable Normalizer architecture) | `flink/normalization/ports.py`, `adapters/engine.py`, `config/sources/github.yml` | Implemented - contract-driven per `AD-006`; all 11 P1 event types declared and covered by `tests/flink/normalization/test_contracts_github.py` (2026-08-19). Awaiting end-to-end verification in T19 |
 | FLK-13 | P2: Coverage extension (sample capture) | - | Pending |
 | FLK-14 | P2: Coverage extension (mapping table update) | - | Pending |
 | FLK-15 | P2: Coverage extension (fallback resolved per type) | - | Pending |
