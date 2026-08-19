@@ -6,11 +6,13 @@ This is a hands-on learning project (see `.specs/RFC.md`). The point is for the 
 
 ## Interaction & conventions
 
-See `.claude/rules/interaction-protocol.md` (mentor mode, no-agent-commits, AD-001/002/003) and `.claude/rules/python-conventions.md` (code style). These load automatically; this file stays as project overview and architecture.
+See `.claude/rules/interaction-protocol.md` (per-task authorship levels, no-agent-commits, AD-001/002/003/008) and `.claude/rules/python-conventions.md` (code style). These load automatically; this file stays as project overview and architecture.
+
+Authorship is not blanket: each task is `own`, `paired`, or `deliver`, derived from the knowledge state and recorded in `.mentor/features/<slug>/map.md`. Read that file's levels before writing anything for a task.
 
 ## Language
 
-Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifiers, log messages, docstrings, and commit messages: English - this is already the codebase's convention (logs were deliberately migrated PT→EN; class/function/variable names have always been English).
+Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifiers, log messages, docstrings, and commit messages: English - this is already the codebase's convention (logs were deliberately migrated PT→EN; class/function/variable names have always been English). Project documents that state rules, record decisions, or summarize an external API are English too: this file, `.claude/rules/*.md`, `.claude/ref/*`, everything under `.specs/`, and `.mentor/`'s bookkeeping files (`profile.md`, `knowledge.md`, `map.md`) - they quote English identifiers throughout and `.specs/STATE.md` is their canonical source. The one exception is prose written as teaching material for the user to read: `.mentor/**/classes/` notes stay PT-BR.
 
 ## Source of truth
 

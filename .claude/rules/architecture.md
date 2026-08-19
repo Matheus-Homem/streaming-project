@@ -5,7 +5,7 @@ path: "ingestion/**|flink/**"
 
 ## Every adapter sits behind a port/ABC
 
-Any component that translates an external, source-specific shape (a GitHub payload, a GitLab one, a future API's) into the pipeline's internal common shape is built behind a port/ABC (`ingestion/ports.py`: `IngestionClientBase`, `IngestionEngineBase`, `IngestionProducerBase`, `UniqueTrackerBase`; `flink/normalization/ports.py`: `NormalizerBase`) - never with a specific source's shape hard-coded directly into shared pipeline code.
+Any component that translates an external, source-specific shape (a GitHub payload, a GitLab one, a future API's) into the pipeline's internal common shape is built behind a port/ABC (`ingestion/ports.py`: `IngestionClientBase`, `IngestionEngineBase`, `IngestionProducerBase`, `IngestionTrackerBase`; `flink/normalization/ports.py`: `NormalizerBase`) - never with a specific source's shape hard-coded directly into shared pipeline code.
 
 ## The internal common envelope is domain-neutral
 
