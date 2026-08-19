@@ -6,7 +6,15 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **If the skill cannot be activated, STOP and tell the user - do not proceed without it.**
 
-**Project-specific override (`AD-001`/`AD-003`, `CLAUDE.md`): mentor mode governs Execute for this feature.** The agent never authors production code for these tasks - it explains, points at the approach, reviews what the user writes, and runs the gate. The agent never commits (`AD-003`) - it hands off a diff + suggested Conventional Commit message per task instead.
+**Project-specific override (`AD-001`/`AD-003`/`AD-008`, `CLAUDE.md`): mentor mode governs Execute for this feature, scoped per task by its authorship level.** Every open task carries an `own`/`paired`/`deliver` level, assigned from the knowledge state and recorded in `.mentor/features/flink-normalization/map.md` - read it before starting any task:
+
+- `own` - the agent never authors the code; it explains, points at the approach, reviews what the user writes, and runs the gate.
+- `paired` - the user makes and defends the decision the task carries first; only then does the agent write the mechanical body around it.
+- `deliver` - the agent writes it, the user reviews. Never logged as evidence.
+
+Levels are read from `map.md`, not re-judged per task. As of 2026-08-18 the open work splits 7 `deliver` / 4 `paired` / 1 `own` - T15-T19 carry five of the six `unassessed` `pyflink` objectives and are where the learning is.
+
+The agent never commits (`AD-003`, unaffected by `AD-008`) - it hands off a diff + suggested Conventional Commit message per task instead.
 
 ---
 
@@ -21,13 +29,13 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 | Code Layer | Required Test Type | Coverage Expectation | Location Pattern | Run Command |
 | --- | --- | --- | --- | --- |
-| `NormalizerBase` (ABC, `ports.py`) | none | Interface only, no logic - matches the untested-ABC precedent of `ingestion/ports.py` | - | build gate only |
+| `NormalizationEngineBase` (ABC, `ports.py`) | none | Interface only, no logic - matches the untested-ABC precedent of `ingestion/ports.py` | - | build gate only |
 | Contract models (Pydantic grammar, `models.py`) | unit | All validation branches. A contract with an unknown key, a missing `from`/`expression`, or an unsupported `as:` value MUST fail validation - this is the platform's only defence against a silently-null column (`design.md` Risks) | `tests/flink/normalization/test_models.py` | `make test` |
 | Contract compiler (`models.py`) | unit | 1:1 to every row of `design.md`'s compilation-rule table (`from`, `take`, `as: boolean`, `as: timestamp`, `default`, raw `expression`) | `tests/flink/normalization/test_models.py` | `make test` |
 | Contract loader (`models.py`) | unit | Happy path + unknown source raises + caching behaviour - mirrors `tests/ingestion/test_models.py`'s coverage of `get_source_config` | `tests/flink/normalization/test_models.py` | `make test` |
-| Custom JMESPath functions (`functions.py`) | unit | All branches incl. malformed/absent input - it is the one piece of real computation in the contract path | `tests/flink/normalization/test_functions.py` | `make test` |
-| `ContractNormalizer` (domain logic, `adapters/contract_normalizer.py`) | unit | All branches; 1:1 to `spec.md`'s P1 Normalization ACs - envelope shape, common block, per-type block, unmapped-type fallback (AC5), absent optional field → null | `tests/flink/normalization/adapters/test_contract_normalizer.py` | `make test` |
-| Normalization contracts (`config/*.yml`) | unit | The contract is data, but its *effect* is behaviour: each declared event type must produce exactly its `spec.md` Normalization Mapping row when run against a real fixture. Verified through `ContractNormalizer`, not by asserting on the YAML | `tests/flink/normalization/test_contracts_github.py` | `make test` |
+| Custom JMESPath functions (`functions.py`) | unit | All branches incl. malformed/absent input - it is the one piece of real computation in the contract path | `tests/flink/normalization/adapters/test_evaluator.py` | `make test` |
+| `NormalizationEngine` (domain logic, `adapters/engine.py`) | unit | All branches; 1:1 to `spec.md`'s P1 Normalization ACs - envelope shape, common block, per-type block, unmapped-type fallback (AC5), absent optional field → null | `tests/flink/normalization/adapters/test_engine.py` | `make test` |
+| Normalization contracts (`config/*.yml`) | unit | The contract is data, but its *effect* is behaviour: each declared event type must produce exactly its `spec.md` Normalization Mapping row when run against a real fixture. Verified through `NormalizationEngine`, not by asserting on the YAML | `tests/flink/normalization/test_contracts_github.py` | `make test` |
 | `NormalizationFunction` (Flink `FlatMapFunction`, `job.py`) | unit | All branches: valid message → yields normalized record; malformed JSON / bad `schema_version` / unregistered source → yields nothing + logs. Called directly as a plain Python method - no live cluster needed | `tests/flink/normalization/test_job.py` | `make test` |
 | Job wiring (`app.py`) | unit | Config/env wiring covered with mocks (mirrors `tests/ingestion/test_app.py`'s `build_arguments`/`configure_*` pattern) - `StreamExecutionEnvironment.execute()` itself is not exercised in unit tests | `tests/flink/normalization/test_app.py` | `make test` |
 | Docker/compose/shell infra (`Dockerfile`s, `docker-compose.yml`, `create-topics.sh`) | none | No unit tests apply; verified via each story's `spec.md` Independent Test | - | manual (spec Independent Test) + `docker compose -f infra/docker/docker-compose.yml config` for YAML/interpolation validity |
@@ -163,9 +171,9 @@ Tasks: T20, T21, T22
 
 ---
 
-### T5: `NormalizerBase` port
+### T5: `NormalizationEngineBase` port
 
-**What**: Abstract `NormalizerBase` class with one abstract method, `normalize(self, event: RawEvent) -> dict[str, Any]`, docstring-documented like `ingestion/ports.py`'s existing ABCs.
+**What**: Abstract `NormalizationEngineBase` class with one abstract method, `normalize(self, event: RawEvent) -> dict[str, Any]`, docstring-documented like `ingestion/ports.py`'s existing ABCs.
 **Where**: `flink/normalization/ports.py`
 **Depends on**: None
 **Reuses**: `ingestion/ports.py`'s ABC shape (`IngestionEngineBase`, etc.) as the direct template
@@ -173,9 +181,9 @@ Tasks: T20, T21, T22
 
 **Tools**: MCP: NONE / Skill: NONE
 
-**Done when**:
-- [ ] `NormalizerBase` defined with the `normalize` abstract method matching design.md's signature
-- [ ] Docstring documents args/return per design.md (never raises for a structurally valid `RawEvent`; never returns `None`)
+**Done when** (verified 2026-08-18 - shipped as two ABCs instead of one, see `design.md`'s naming-drift note; behavior below still matches the intent):
+- [x] Orchestration ABC defined with a `normalize` abstract method matching the intent - `NormalizationEngineBase.normalize(self, event: RawEvent) -> dict[str, Any]` (`flink/normalization/ports.py`); a second ABC, `NormalizationEvaluatorBase.evaluate(self, rule: FieldRule, payload: dict) -> Any`, was split out for the compile/evaluate half - not in the original one-method design
+- [x] Docstrings document args/return per design.md's intent (never raises for a structurally valid `RawEvent`; never returns `None`)
 
 **Tests**: none
 **Gate**: build
@@ -245,7 +253,7 @@ Tasks: T20, T21, T22
 - [x] It also handles the offset-naive form `ingestion` produces for `observed_at` - treated as UTC (flagged as an inherited assumption worth revisiting: `ingestion/adapters/engine.py`'s `observed_at` is actually local system time, not UTC - not in this task's scope)
 - [x] Behaviour on a null/absent input is defined and tested (returns null rather than raising - a missing timestamp must not kill the record, per `design.md`'s Error Handling) - both `None` and `""` return `None`
 - [x] Unit tests cover each case above - `TestNormalizationFunctionsIsoToMillis` (5 cases, direct calls) + `TestIsoToMillisThroughJmespath` (3 cases, exercised through `jmespath.compile(...).search(..., options=OPTIONS)` - the real call path the compiler/normalizer will use)
-- [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_functions.py` - 8 passed; full `make test` also verified (112 passed, `flink/normalization/functions.py` 100% coverage, no regression)
+- [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/adapters/test_evaluator.py` - 8 passed; full `make test` also verified (112 passed, `flink/normalization/functions.py` 100% coverage, no regression)
 
 **Tests**: unit
 **Gate**: quick
@@ -269,7 +277,7 @@ Tasks: T20, T21, T22
 - [x] `from: created_at` + `as: timestamp` → `iso_to_millis(created_at)`
 - [x] `default:` produces the documented fallback form - `_jmespath_literal` uses `json.dumps` so string/list/bool defaults serialize correctly (not `str()`), and `default: null` compiles to the bare path (native null-on-missing, no `||`)
 - [x] `expression:` is passed through verbatim (escape hatch, `AD-006`)
-- [x] Unit tests: one per row above, asserting the compiled expression AND that it evaluates correctly against a real event fixture - not just string equality, which would pass on a syntactically valid but wrong expression. Fixture note: `tmp/event_sample.json` has moved to `flink/normalization/event_sample.json` (test resolves it via `Path(__file__).parents[3]`)
+- [x] Unit tests: one per row above, asserting the compiled expression AND that it evaluates correctly against a real event fixture - not just string equality, which would pass on a syntactically valid but wrong expression. Fixture note: `flink/normalization/event_sample.json` has moved to `flink/normalization/event_sample.json` (test resolves it via `Path(__file__).parents[3]`)
 - [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_models.py` - 18 passed; full `make test` also verified (121 passed, `flink/normalization/models.py` 100% coverage, no regression)
 
 **Tests**: unit
@@ -279,7 +287,7 @@ Tasks: T20, T21, T22
 
 ### T10: Contract loader
 
-**What**: `get_normalization_contract(source: str) -> NormalizationContract` - reads `flink/normalization/config/<source>.yml`, validates it through T7's models, compiles every field rule once via T9, and caches the result. Raises `NotImplementedError` for an unknown source. Directly mirrors `ingestion.models.get_source_config`'s shape.
+**What**: `get_normalization_contract(source: str) -> NormalizationContract` - reads `flink/normalization/config/sources/<source>.yml`, validates it through T7's models, compiles every field rule once via T9, and caches the result. Raises `NotImplementedError` for an unknown source. Directly mirrors `ingestion.models.get_source_config`'s shape.
 **Where**: `flink/normalization/models.py`
 **Depends on**: T9
 **Reuses**: `ingestion/models.py`'s `_load_yaml_config` (`@lru_cache` + `Path(__file__).parent / "config"` + `yaml.safe_load`) as the 1:1 template
@@ -288,59 +296,65 @@ Tasks: T20, T21, T22
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] A valid contract file loads, validates, and returns compiled rules
-- [ ] An unknown source raises `NotImplementedError`, matching `get_source_config`'s convention
-- [ ] An invalid contract fails at load time with a message naming the file, event type, and field (`design.md` Error Handling: fail-fast at startup, never silently at runtime)
-- [ ] Compilation happens once per source, not per call (`design.md` Tech Decisions) - asserted via caching behaviour
-- [ ] Unit tests cover each branch above
-- [ ] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_models.py`
+- [x] A valid contract file loads and validates - returns a `NormalizationContract` of parsed `FieldRule`s (not pre-compiled JMESPath strings - see caveat below)
+- [x] An unknown source raises `NotImplementedError`, matching `get_source_config`'s convention
+- [x] An invalid contract fails at load time with a message naming the field (Pydantic's own error text; doesn't name the file/event type explicitly - minor gap vs the exact wording here)
+- [~] Compilation happens once per source, not per call (`design.md` Tech Decisions) - **deliberately deferred, 2026-08-18**: confirmed still not true (`NormalizationJmespathEvaluator._compile_rule` in `flink/normalization/adapters/evaluator.py` rebuilds the JMESPath expression string on every `evaluate()` call, once per field per event). User explicitly accepted this as non-blocking tech debt rather than fixing it now - a pure perf gap (correctness is unaffected; every test passes), worth revisiting before T19's real-traffic run, not before. Tracked here and in `.specs/STATE.md` so it isn't lost.
+- [x] Unit tests cover each verified branch above - `TestGetContract` (4 cases: valid load, `NotImplementedError`, invalid contract, caching via `cache_clear()`/mocked `yaml.safe_load`)
+- [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_models.py` - 14 passed
 
 **Tests**: unit
 **Gate**: quick
+**Status**: Closed 2026-08-18 - one item deliberately deferred as accepted tech debt (see `[~]` above), not a false-done checkbox.
 
 ---
 
-### T11: `ContractNormalizer`
+### T11: `NormalizationEngine`
 
-**What**: The single source-agnostic `NormalizerBase` implementation. Resolves the contract for `event.source`, looks up the per-event-type block for `event.source_event_type` (empty block when undeclared), evaluates envelope + common + per-type rules against `RawEvent.payload`, and returns one flat dict. Contains zero GitHub-specific logic.
-**Where**: `flink/normalization/adapters/contract_normalizer.py`
+**What**: The single source-agnostic `NormalizationEngineBase` implementation. Resolves the contract for `event.source`, looks up the per-event-type block for `event.source_event_type` (empty block when undeclared), evaluates envelope + common + per-type rules against `RawEvent.payload`, and returns one flat dict. Contains zero GitHub-specific logic.
+**Where**: `flink/normalization/adapters/engine.py`
 **Depends on**: T10
-**Reuses**: `flink/normalization/ports.py`'s `NormalizerBase` (T5), `shared.models.RawEvent`
+**Reuses**: `flink/normalization/ports.py`'s `NormalizationEngineBase` (T5), `shared.models.RawEvent`
 **Requirement**: FLK-06, FLK-07, FLK-08, FLK-09, FLK-10, FLK-12
 
 **Tools**: MCP: NONE / Skill: NONE
 
+**Re-verified 2026-08-18 against the code as it actually shipped** - `NormalizationEngine` (`flink/normalization/adapters/engine.py`), not `NormalizationEngine`/`contract_normalizer.py` (see `design.md`'s naming-drift note).
+
 **Done when**:
-- [ ] Output contains the Domain-Neutral Envelope fields from `spec.md`, with `source`/`event_id`/`event_type`/`ingested_at` taken from the `RawEvent` envelope itself (not the contract) and `schema_version` set to the normalized schema's own version
-- [ ] `partition_key` is populated from the contract's `partition_key` rule (FLK-08)
-- [ ] An event type absent from the contract's `event_types` still returns envelope + common block with an empty per-type block, never `None` and never raising (FLK-10, spec P1 AC5)
-- [ ] A contract path absent from a given payload yields a null field rather than an error (`design.md` Error Handling)
-- [ ] No GitHub identifier appears anywhere in this module - verifiable by grep
-- [ ] Unit tests cover each branch above using a minimal hand-built contract, independent of the real GitHub contract (which T12-T14 test separately)
-- [ ] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/adapters/test_contract_normalizer.py`
+- [x] Output contains the Domain-Neutral Envelope fields from `spec.md` - **closed 2026-08-19** (agent-authored under `AD-008`, task level `deliver`). `_clean_event_dictionary` now emits `source`, `event_id`, `event_type`, `ingested_at` (epoch millis) and `schema_version`, and `source_event_endpoint`/`observed_at`/`payload` no longer leak into the output. Four bugs fixed in the in-progress version: the `"ingested_at "` and `"schema_version "` keys carried a trailing space (silently producing field names no consumer would match); `source` was missing entirely despite spec AC2 requiring it; and the local `_iso_to_epoch_millis` lacked the tz-naive->UTC guard that `evaluator.py`'s `iso_to_millis` has, so a naive `observed_at` would have been read as local time. `schema_version` is now the module constant `NORMALIZED_SCHEMA_VERSION = 1`, independent of `RawEvent.schema_version` by construction rather than by coincidence. Covered by four new tests in `TestNormalizationEngine` (exact envelope field names + absence of raw-only fields, epoch-millis conversion, naive-timestamp fallback, schema_version independence). `make test`: 135 passed
+- [x] `partition_key` is populated from the contract's `partition_key` rule (FLK-08)
+- [x] An event type absent from the contract's `event_types` still returns envelope + common block with an empty per-type block, never `None` and never raising (FLK-10, spec P1 AC5) - **fixed 2026-08-18**, two review rounds: first attempt returned `None` for the undeclared-type path (a drop, conflating AC5 with AC6's log-and-skip); second attempt lost `partition_key`/`envelope`/`common` too (fell back to `event.model_dump()` alone, none of which carries the contract-resolved fields). Final fix: `_collect_field_rules`'s `except KeyError` branch rebuilds the `chain` from just `partition_key`+`envelope`+`common` (dropping only the failed `event_types[event_type]` piece), instead of returning `None`. Verified live against the real `github.yml` contract: an unmapped `CreateEvent` now returns `partition_key`/`actor_id`/`actor_login`/`event_time`/`repo_id`/`repo_name`/`org_login` populated, no per-type fields, no exception
+- [x] A contract path absent from a given payload yields a null field rather than an error (`design.md` Error Handling)
+- [x] No GitHub identifier appears anywhere in this module - verifiable by grep - asserted in test via `inspect.getsource` (`test_module_contains_no_github_specific_vocabulary`)
+- [x] Unit tests cover each verified branch above using a minimal hand-built contract, independent of the real GitHub contract (which T12-T13 test against real fixtures) - `TestNormalizationEngine` (6 cases, `tests/flink/normalization/adapters/test_engine.py`) - now includes the undeclared-event-type case (`test_can_normalize_event_of_undeclared_type_without_raising`, `test_can_evaluate_only_envelope_and_common_rules_for_undeclared_type`), agent-authored under `AD-002` (production code confirmed functional, user explicitly requested the test)
+- [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/adapters/test_engine.py` - 6 passed (2026-08-18); full `make test` also verified - 131 passed, no regression, `flink/normalization/models.py`/`ports.py`/`evaluator.py` still 100% coverage
 
 **Tests**: unit
 **Gate**: quick - closes Phase 3
+**Status**: Re-opened 2026-08-18 (`/mentor-next` dry run) - the AC5 fallback fix stands, but the Domain-Neutral Envelope field-naming gap above still needs a fix + test before Phase 3 can close for real.
 
 ---
 
 ### T12: GitHub contract - shared blocks
 
-**What**: `flink/normalization/config/github.yml` with its `source`, `partition_key`, `envelope`, and `common` blocks per `spec.md`'s Domain-Neutral Envelope and GitHub-specific fields block tables. No `event_types` entries yet (T13, T14).
-**Where**: `flink/normalization/config/github.yml`
+**What**: `flink/normalization/config/sources/github.yml` with its `source`, `partition_key`, `envelope`, and `common` blocks per `spec.md`'s Domain-Neutral Envelope and GitHub-specific fields block tables. No `event_types` entries yet (T13, T14).
+**Where**: `flink/normalization/config/sources/github.yml` (not `flink/normalization/config/sources/github.yml` - see `design.md`'s naming-drift note)
 **Depends on**: T11
 **Reuses**: `spec.md`'s Normalization Mapping tables are the authoritative field list - this task transcribes them, it does not re-derive them
 **Requirement**: FLK-07, FLK-08
 
+**Status note (updated 2026-08-18 by `/mentor-next`'s dry-run verification, second pass)**: the `is_public`-vs-`public` naming gap flagged in the previous pass is now fixed - `common.public` in `flink/normalization/config/sources/github.yml` maps `from: "public"` directly, and the field set (`repo_id`, `repo_name`, `org_id`, `org_login`, `public`) now matches `spec.md`'s GitHub-specific fields block exactly, live-verified. Still no `tests/flink/normalization/test_contracts_github.py` (the matrix's expected location) - `TestNormalizationEngine` only exercises a hand-built minimal contract, so none of T12/T13's "field by field, no extras/omissions" criteria have real test evidence yet. T11's still-open Domain-Neutral Envelope gap (see above) also affects what a real `test_contracts_github.py` would need to assert for the envelope half of this task.
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `partition_key` resolves to `repo.name` (spec P1 AC3)
-- [ ] `envelope` covers `actor_id`, `actor_login`, `event_time` (with `as: timestamp`)
-- [ ] `common` covers `repo_id`, `repo_name`, `org_id`, `org_login`, `public`
-- [ ] `org_id`/`org_login` come back null for an event whose payload has no `org`, verified against a real fixture (spec.md Edge Cases)
-- [ ] Unit tests run a real `tmp/event_sample.json` event through `ContractNormalizer` and assert the envelope + common output, field by field
-- [ ] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_contracts_github.py`
+- [x] `partition_key` resolves to `repo.name` (spec P1 AC3) - live-verified 2026-08-18
+- [x] `envelope` covers `actor_id`, `actor_login`, `event_time` (with `as: timestamp`) - live-verified 2026-08-18, `event_time` correctly epoch-millis via `iso_to_millis`
+- [x] `common` covers `repo_id`, `repo_name`, `org_id`, `org_login`, `public` - re-verified 2026-08-18 by `/mentor-next`: the contract now emits `public` (`from: "public"`), matching `spec.md` exactly; the earlier `is_public` naming gap noted below has since been fixed in the code
+- [x] `org_id`/`org_login` come back null for an event whose payload has no `org`, verified against a real fixture (spec.md Edge Cases) - live-verified 2026-08-18
+- [x] Unit tests run a real event through `NormalizationEngine` and assert the envelope + common output, field by field - **closed 2026-08-19** (agent-authored, task level `deliver`): `tests/flink/normalization/test_contracts_github.py`, 17 tests + 4 subtests, driven through `NormalizationEngine` against the real captured sample (new `load_github_events_by_type()` helper in `tests/fixtures/events.py`, so tests read the captured traffic instead of duplicating it). Envelope identity, actor, both epoch-millis conversions, repo/org block, `public` as a real bool, null org fields on an org-less event, and absence of the raw-only fields are each asserted (`tests/flink/normalization/test_contracts_github.py`); `tests/fixtures/events.py`'s `GITHUB_EVENT` (a real captured `IssueCommentEvent`) is available to build it against, replacing the stale `flink/normalization/event_sample.json` reference
+- [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_contracts_github.py` - 17 passed, 4 subtests (2026-08-19); full `make test` also verified - 155 passed, no regression
 
 **Tests**: unit
 **Gate**: quick
@@ -350,20 +364,20 @@ Tasks: T20, T21, T22
 ### T13: GitHub contract - the 4 sample-verified event types
 
 **What**: `event_types` entries for `IssueCommentEvent`, `PullRequestEvent`, `PullRequestReviewEvent`, and `PullRequestReviewCommentEvent` - the four whose field mapping was verified against real traffic.
-**Where**: `flink/normalization/config/github.yml`
+**Where**: `flink/normalization/config/sources/github.yml`
 **Depends on**: T12
-**Reuses**: `tmp/event_sample.json` holds a real instance of each of these four; `spec.md`'s per-type curated-field rows are the binding spec
+**Reuses**: `flink/normalization/event_sample.json` holds a real instance of each of these four; `spec.md`'s per-type curated-field rows are the binding spec
 **Requirement**: FLK-06
 
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Each of the four types produces exactly its `spec.md` Normalization Mapping row - field by field, no extras, no omissions
-- [ ] `issue_labels` is a list of label names, not label objects (`take: name`)
-- [ ] `issue_is_pull_request` is a real boolean reflecting presence/absence of `issue.pull_request`
-- [ ] `label_name` is null when `payload.label` is absent
-- [ ] Unit tests use the real fixture for each type, driven through `ContractNormalizer`
-- [ ] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_contracts_github.py`
+- [x] Each of the four types produces exactly its `spec.md` Normalization Mapping row - field by field, no extras, no omissions - **verified 2026-08-19 by `/mentor-next`**: the four `event_types` entries exist in `config/sources/github.yml` (added since the 2026-08-18 note below, which is now stale) and their field sets match `spec.md` exactly - `IssueCommentEvent` 16, `PullRequestEvent` 13, `PullRequestReviewEvent` 10, `PullRequestReviewCommentEvent` 14, no extras, no omissions. Field *values* beyond the three criteria below are still only spot-checked, not asserted - that is what the missing test file covers
+- [x] `issue_labels` is a list of label names, not label objects (`take: name`) - live-verified 2026-08-19 against the real sample: `['area/kubelet', 'sig/node', 'kind/feature', 'needs-triage']`
+- [x] `issue_is_pull_request` is a real boolean reflecting presence/absence of `issue.pull_request` - live-verified 2026-08-19 both ways: `True` with the key injected, `False` with it removed. This is the one field where `as: boolean`'s presence-check semantics are the correct reading (unlike `public`, see T12)
+- [x] `label_name` is null when `payload.label` is absent - live-verified 2026-08-19: `'needs-triage'` on the real `PullRequestEvent`, `None` with `payload.label` removed
+- [x] Unit tests use the real fixture for each type, driven through `NormalizationEngine` (the renamed `NormalizationEngine`, kept here as the historical name) - **closed 2026-08-19** (agent-authored, task level `deliver`): `tests/flink/normalization/test_contracts_github.py`, 17 tests + 4 subtests, driven through `NormalizationEngine` against the real captured sample (new `load_github_events_by_type()` helper in `tests/fixtures/events.py`, so tests read the captured traffic instead of duplicating it). Field sets asserted as exact set equality per type, so an extra or missing field fails. A guard test asserts the fixture still carries all four types, so the subTest loop cannot pass empty
+- [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_contracts_github.py` - 17 passed, 4 subtests (2026-08-19); full `make test` also verified - 155 passed, no regression
 
 **Tests**: unit
 **Gate**: quick
@@ -373,7 +387,7 @@ Tasks: T20, T21, T22
 ### T14: GitHub contract - the 7 doc-resolved event types
 
 **What**: `event_types` entries for `WatchEvent`, `CreateEvent`, `DeleteEvent`, `PublicEvent`, `GollumEvent`, `IssuesEvent`, and `MemberEvent` - mapped from the GitHub Events API docs and cross-checked against sample-verified nested shapes.
-**Where**: `flink/normalization/config/github.yml`
+**Where**: `flink/normalization/config/sources/github.yml`
 **Depends on**: T13
 **Reuses**: `spec.md`'s per-type rows; the `issue`/`user`/`label` nested shapes already verified by T13's fixtures
 **Requirement**: FLK-06
@@ -381,13 +395,13 @@ Tasks: T20, T21, T22
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Each of the seven types produces exactly its `spec.md` Normalization Mapping row
-- [ ] `CreateEvent` does NOT emit `full_ref` (deliberately excluded - `spec.md` Assumptions)
-- [ ] `PublicEvent` contributes no per-type fields (documented as an empty payload) yet still produces envelope + common
-- [ ] `IssuesEvent`'s `assignee_login` is null when `payload.assignee` is absent
-- [ ] `GollumEvent.pages` is a list of curated page objects with `html_url` dropped
-- [ ] Unit tests use hand-built fixtures matching the documented shapes (no real sample exists for these seven)
-- [ ] Gate check passes: `make test`
+- [x] Each of the seven types produces exactly its `spec.md` Normalization Mapping row - **closed 2026-08-19** (agent-authored, task level `deliver`): `CreateEvent` 5, `DeleteEvent` 3, `PublicEvent` 0, `GollumEvent` 1, `IssuesEvent` 14, `MemberEvent` 3 (`WatchEvent` 1 was already declared). Contract now declares 11 types; each asserted as exact set equality against the spec row
+- [x] `CreateEvent` does NOT emit `full_ref` (deliberately excluded - `spec.md` Assumptions) - **closed 2026-08-19** (agent-authored, task level `deliver`) - the hand-built fixture deliberately *includes* `full_ref` in the payload so the test proves it is dropped by the contract, not merely absent from the input
+- [x] `PublicEvent` contributes no per-type fields (documented as an empty payload) yet still produces envelope + common - **closed 2026-08-19** (agent-authored, task level `deliver`) - declared explicitly as `PublicEvent: {}` rather than left undeclared. Output is identical either way, but the explicit entry distinguishes "mapped, known to be empty" from "never heard of this type"
+- [x] `IssuesEvent`'s `assignee_login` is null when `payload.assignee` is absent - **closed 2026-08-19** (agent-authored, task level `deliver`) - note the real path is `payload.issue.assignee.login`, not `payload.assignee`; `assignees` plucks logins via `take: login`
+- [x] `GollumEvent.pages` is a list of curated page objects with `html_url` dropped - **closed 2026-08-19** (agent-authored, task level `deliver`) - the only field in the whole contract needing the `expression:` escape hatch: `take:` plucks a single key, so a list of multi-key objects requires a JMESPath multiselect hash. Applies `K-12`'s established precedent (`E-10`: use the escape hatch rather than growing the friendly vocabulary for one shape)
+- [x] Unit tests use hand-built fixtures matching the documented shapes (no real sample exists for these seven) - **closed 2026-08-19** (agent-authored, task level `deliver`) - `DOC_SHAPED_GITHUB_EVENTS` in `tests/fixtures/events.py`, 7 events built from the docs' shapes
+- [x] Gate check passes: `make test` - 161 passed, 16 subtests (2026-08-19), no regression
 
 **Tests**: unit
 **Gate**: full
@@ -396,7 +410,7 @@ Tasks: T20, T21, T22
 
 ### T15: `NormalizationFunction` (Flink `FlatMapFunction`)
 
-**What**: `NormalizationFunction(FlatMapFunction)` with `flat_map(self, value: str) -> Iterator[str]`: parses/validates `value` as a `RawEvent` (log + yield nothing on bad JSON, missing field, or `schema_version != 1`), delegates to `ContractNormalizer` (log + yield nothing when no contract exists for that source), `json.dumps` the result, yields it. Adds `apache-flink` to `requirements/flink.txt`.
+**What**: `NormalizationFunction(FlatMapFunction)` with `flat_map(self, value: str) -> Iterator[str]`: parses/validates `value` as a `RawEvent` (log + yield nothing on bad JSON, missing field, or `schema_version != 1`), delegates to `NormalizationEngine` (log + yield nothing when no contract exists for that source), `json.dumps` the result, yields it. Adds `apache-flink` to `requirements/flink.txt`.
 **Where**: `flink/normalization/job.py`
 **Depends on**: T11
 **Reuses**: `RawEvent.model_validate_json`; the log-and-skip pattern from `ingestion/adapters/engine.py`'s `_format_events`
@@ -453,7 +467,7 @@ Tasks: T20, T21, T22
 - [ ] Image builds successfully
 - [ ] `python3 -c "import pyflink, jmespath"` succeeds inside the built image
 - [ ] The Kafka connector JAR is present under `/opt/flink/lib`
-- [ ] `flink/normalization/config/*.yml` is present in the image - the job cannot start without its contracts (`design.md` Risks)
+- [ ] `flink/normalization/config/sources/*.yml` is present in the image - the job cannot start without its contracts (`design.md` Risks)
 - [ ] The image does NOT copy `ingestion/` - the contract design removed that cross-package dependency
 
 **Tests**: none
@@ -507,10 +521,10 @@ Tasks: T20, T21, T22
 
 ### T20: Capture real-traffic sample for the 6 remaining event types
 
-**What**: Run the ingestion service (or a throwaway script against the GitHub Events API) long enough to capture at least one real instance of `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, and - best-effort - `SponsorshipEvent`. Mirrors the process that produced `tmp/event_sample.json`.
+**What**: Run the ingestion service (or a throwaway script against the GitHub Events API) long enough to capture at least one real instance of `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, and - best-effort - `SponsorshipEvent`. Mirrors the process that produced `flink/normalization/event_sample.json`.
 **Where**: `tmp/event_sample_extended.json`
 **Depends on**: T19
-**Reuses**: The same capture method behind `tmp/event_sample.json`
+**Reuses**: The same capture method behind `flink/normalization/event_sample.json`
 **Requirement**: FLK-13
 
 **Tools**: MCP: NONE / Skill: NONE
@@ -528,7 +542,7 @@ Tasks: T20, T21, T22
 ### T21: Contract entries for `PushEvent`, `ForkEvent`, `ReleaseEvent`
 
 **What**: Derive the curated field mapping for these three from T20's real sample, add the rows to `spec.md`'s Normalization Mapping table, and add the corresponding `event_types` entries to the GitHub contract.
-**Where**: `flink/normalization/config/github.yml`, `.specs/features/flink-normalization/spec.md`
+**Where**: `flink/normalization/config/sources/github.yml`, `.specs/features/flink-normalization/spec.md`
 **Depends on**: T20
 **Reuses**: The noise-filtering convention already fixed for the 11 mapped types (drop `avatar_url`, `gravatar_id`, redundant `*_url`)
 **Requirement**: FLK-14, FLK-15
@@ -539,7 +553,7 @@ Tasks: T20, T21, T22
 - [ ] Each type's mapping is derived from the captured sample, not from documentation (the whole reason these six were deferred - `context.md`)
 - [ ] `spec.md`'s Normalization Mapping table gains a row per type, and the "Not yet mapped" list shrinks accordingly
 - [ ] Each type stops falling into the empty-fallback path and produces populated per-type fields (spec P2 AC3)
-- [ ] Unit tests use the captured real fixtures, driven through `ContractNormalizer`
+- [ ] Unit tests use the captured real fixtures, driven through `NormalizationEngine`
 - [ ] Gate check passes: `make test`
 
 **Tests**: unit
@@ -550,7 +564,7 @@ Tasks: T20, T21, T22
 ### T22: Contract entries for `DiscussionEvent`, `CommitCommentEvent`, `SponsorshipEvent`
 
 **What**: Same as T21 for the remaining three. `SponsorshipEvent` is conditional: if T20 did not capture one, it stays on the empty-envelope fallback and is documented as a known gap rather than blocking the story (spec P2 AC4).
-**Where**: `flink/normalization/config/github.yml`, `.specs/features/flink-normalization/spec.md`
+**Where**: `flink/normalization/config/sources/github.yml`, `.specs/features/flink-normalization/spec.md`
 **Depends on**: T21
 **Reuses**: Same convention as T21
 **Requirement**: FLK-14, FLK-15, FLK-16
@@ -614,7 +628,7 @@ Execution is strictly sequential - there is no intra-phase parallelism. A single
 
 Note the Phase 3 shape: `T7` (grammar) and `T8` (custom function) both feed `T9` (compiler), because
 the compiler must emit a call to the function it was given and validate against the grammar it targets.
-`T15` (`NormalizationFunction`) depends on `T11` (`ContractNormalizer`) rather than on the GitHub
+`T15` (`NormalizationFunction`) depends on `T11` (`NormalizationEngine`) rather than on the GitHub
 contract - it is source-agnostic and testable before any contract exists, which is the whole point of
 `AD-006`.
 
@@ -639,13 +653,13 @@ contract - it is source-agnostic and testable before any contract exists, which 
 | T2: wire topic-init service | 1 file (compose edit) | ✅ Granular |
 | T3: ingestion Dockerfile | 1 file | ✅ Granular |
 | T4: wire ingestion service | 1 file (compose edit) | ✅ Granular |
-| T5: `NormalizerBase` port | 1 interface | ✅ Granular |
+| T5: `NormalizationEngineBase` port | 1 interface | ✅ Granular |
 | T6: flink package test wiring | 3 config files, one cohesive purpose | ⚠️ OK - cohesive (none of the three is verifiable alone; together they are "the flink package is now covered by the existing tooling") |
 | T7: contract grammar | 2 related Pydantic models, 1 file | ✅ Granular |
 | T8: `iso_to_millis` function | 1 function | ✅ Granular |
 | T9: contract compiler | 1 function | ✅ Granular |
 | T10: contract loader | 1 function | ✅ Granular |
-| T11: `ContractNormalizer` | 1 class | ✅ Granular |
+| T11: `NormalizationEngine` | 1 class | ✅ Granular |
 | T12: GitHub contract shared blocks | 1 file (3 cohesive blocks of the same contract) | ✅ Granular |
 | T13: GitHub contract, 4 verified types | 1 file (same contract, additive) | ✅ Granular |
 | T14: GitHub contract, 7 doc types | 1 file (same contract, additive) | ✅ Granular |
@@ -699,13 +713,13 @@ No task depends on a later-phase task. All dependencies point backward or within
 | T2 | Docker/shell infra | none | none | ✅ OK |
 | T3 | Docker/shell infra | none | none | ✅ OK |
 | T4 | Docker/shell infra | none | none | ✅ OK |
-| T5 | `NormalizerBase` (ABC) | none | none | ✅ OK |
+| T5 | `NormalizationEngineBase` (ABC) | none | none | ✅ OK |
 | T6 | Build/test config only, no code layer | none | none | ✅ OK |
 | T7 | Contract models | unit | unit | ✅ OK |
 | T8 | Custom JMESPath functions | unit | unit | ✅ OK |
 | T9 | Contract compiler | unit | unit | ✅ OK |
 | T10 | Contract loader | unit | unit | ✅ OK |
-| T11 | `ContractNormalizer` | unit | unit | ✅ OK |
+| T11 | `NormalizationEngine` | unit | unit | ✅ OK |
 | T12 | Normalization contracts (`config/*.yml`) | unit | unit | ✅ OK |
 | T13 | Normalization contracts | unit | unit | ✅ OK |
 | T14 | Normalization contracts | unit | unit | ✅ OK |
@@ -723,7 +737,7 @@ No violations. `Tests: none` is only used for layers the matrix marks `none` (in
 Note on T12-T14 and T21-T22: these tasks author YAML, not Python, yet they carry `Tests: unit`
 deliberately. A contract is data whose *effect* is behaviour, and an untested contract entry is
 exactly the silent-null-column failure mode `design.md` flags as this design's main risk. The tests
-assert the normalized output against real fixtures, driven through `ContractNormalizer`.
+assert the normalized output against real fixtures, driven through `NormalizationEngine`.
 
 ---
 
