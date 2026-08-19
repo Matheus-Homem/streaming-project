@@ -52,9 +52,9 @@ Build the first Flink consumer of `events-raw`: a PyFlink job that flattens raw 
 
 GitHub has 17 `GitHubEventType` values. Coverage splits by how the field mapping was sourced:
 
-- **4 verified from real traffic** (`flink/normalization/event_sample.json`): `PullRequestEvent`, `IssueCommentEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`.
+- **4 verified from real traffic** (a local capture, untracked by `.gitignore`'s `*_sample.*`; the four events themselves are inlined in `tests/fixtures/events.py` as `SAMPLE_SHAPED_GITHUB_EVENTS`): `PullRequestEvent`, `IssueCommentEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`.
 - **7 resolved from official GitHub Events API docs**, cross-checked against sample-verified nested shapes (`issue`, `user`, `label` objects already known from the 4 verified types): `WatchEvent`, `CreateEvent`, `DeleteEvent`, `PublicEvent`, `GollumEvent`, `IssuesEvent`, `MemberEvent`.
-- **6 remain unresolved** and are explicitly sequenced as a follow-up story within this same feature, not deferred to a separate feature: `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, `SponsorshipEvent`. Official docs proved unreliable for these (the Events API docs for `PushEvent` omit fields the user has seen in real traffic before; `SponsorshipEvent` isn't documented at all on the Events API reference page checked). The story captures real traffic samples first (same method that produced `flink/normalization/event_sample.json`), then maps from verified data - avoiding a repeat of the doc-vs-reality mismatch already caught during this session (webhook docs were initially and mistakenly used for `PushEvent` instead of Events API docs).
+- **6 remain unresolved** and are explicitly sequenced as a follow-up story within this same feature, not deferred to a separate feature: `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, `SponsorshipEvent`. Official docs proved unreliable for these (the Events API docs for `PushEvent` omit fields the user has seen in real traffic before; `SponsorshipEvent` isn't documented at all on the Events API reference page checked). The story captures real traffic samples first (same method that produced the original local capture), then maps from verified data - avoiding a repeat of the doc-vs-reality mismatch already caught during this session (webhook docs were initially and mistakenly used for `PushEvent` instead of Events API docs).
 - Until the 6 are mapped, events of those types still flow through: envelope populated, source-specific fields block empty/null (see Declined/Assumptions below) - not dropped.
 
 ### Agent's Discretion
@@ -74,7 +74,7 @@ GitHub has 17 `GitHubEventType` values. Coverage splits by how the field mapping
 ## Specific References
 
 - `AD-004` in `.specs/STATE.md` is the authoritative record of the API-agnostic-platform intent driving the pluggable-normalizer decision - read it before designing any future source integration.
-- `flink/normalization/event_sample.json` is the real-traffic sample backing the 4 verified event type mappings; the 6-type follow-up story should extend or replace it with a sample that actually contains those types.
+- The 4 verified event type mappings are backed by real captured traffic. The capture file itself is a local artifact and never enters the repo (`.gitignore`'s `*_sample.*`), so the events that tests need live inlined in `tests/fixtures/events.py` (`SAMPLE_SHAPED_GITHUB_EVENTS`); the 6-type follow-up story needs a fresh capture that actually contains those types, inlined the same way.
 
 ---
 

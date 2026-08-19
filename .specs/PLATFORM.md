@@ -81,7 +81,7 @@ keeps both failure modes closed.
 
 ### Verified: how much the engine already does (JMESPath 1.1.0, 2026-08-17)
 
-Probed against the real `tmp/event_sample.json` payload before committing to this design. Findings:
+Probed against real captured GitHub payloads before committing to this design (the capture file is a local artifact, untracked; the events are inlined in `tests/fixtures/events.py`). Findings:
 
 | Need | Resolved by | Evidence |
 | --- | --- | --- |

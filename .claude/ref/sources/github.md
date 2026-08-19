@@ -1,8 +1,8 @@
 # GitHub Events API - fields used by the pipeline
 
-This is a **curated** summary, not the full official GitHub Events API schema. It covers only the fields `ingestion/` and `flink/normalization/` actually consume today, extracted from `flink/normalization/event_sample.json` (a real sample pulled from the public API) and from the example contract `flink/normalization/example.yml`. If a new field is needed, check its real shape in `event_sample.json` (or in GitHub's official docs) instead of assuming - the API has many more fields than the ones listed here.
+This is a **curated** summary, not the full official GitHub Events API schema. It covers only the fields `ingestion/` and `flink/normalization/` actually consume today, extracted from real events pulled from the public API and from the contract `flink/normalization/config/sources/github.yml`. Those events are inlined in `tests/fixtures/events.py` (`GITHUB_EVENT` and `SAMPLE_SHAPED_GITHUB_EVENTS`) - the raw capture file they came from is a local artifact and never enters the repo (`.gitignore`'s `*_sample.*`). If a new field is needed, check its real shape there (or in GitHub's official docs) instead of assuming - the API has many more fields than the ones listed here.
 
-Event types present in the current sample: `IssueCommentEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`, `PullRequestEvent`. `WatchEvent` shows up in the example contract (`example.yml`) but is not in the current sample - the shape below is the one GitHub documents officially, not verified locally.
+Event types backed by a real captured event: `IssueCommentEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`, `PullRequestEvent`. `WatchEvent` is declared in `github.yml` but has no captured instance - the shape below is the one GitHub documents officially, not verified locally.
 
 ## Envelope common to every event
 
@@ -34,7 +34,7 @@ payload.comment.created_at          string  - ISO 8601
 payload.comment.user.login          string
 ```
 
-## `WatchEvent` (not verified against the current sample - confirm if/when it shows up)
+## `WatchEvent` (no captured instance - confirm if/when one shows up)
 
 ```
 payload.action                      string  - typically "started" (starring a repo)
@@ -42,4 +42,4 @@ payload.action                      string  - typically "started" (starring a re
 
 ## `PullRequestEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`
 
-Present in the sample but not yet consumed by any contract in `flink/normalization/`. When normalizing one of these types, inspect the real shape in `event_sample.json` before writing the contract - do not assume symmetry with `IssueCommentEvent`.
+All three are captured in `tests/fixtures/events.py` (`SAMPLE_SHAPED_GITHUB_EVENTS`) and consumed by `flink/normalization/config/sources/github.yml`. When changing one of these mappings, inspect the real shape in that fixture - do not assume symmetry with `IssueCommentEvent`.

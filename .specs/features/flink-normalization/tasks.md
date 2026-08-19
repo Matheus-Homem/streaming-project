@@ -277,7 +277,7 @@ Tasks: T20, T21, T22
 - [x] `from: created_at` + `as: timestamp` → `iso_to_millis(created_at)`
 - [x] `default:` produces the documented fallback form - `_jmespath_literal` uses `json.dumps` so string/list/bool defaults serialize correctly (not `str()`), and `default: null` compiles to the bare path (native null-on-missing, no `||`)
 - [x] `expression:` is passed through verbatim (escape hatch, `AD-006`)
-- [x] Unit tests: one per row above, asserting the compiled expression AND that it evaluates correctly against a real event fixture - not just string equality, which would pass on a syntactically valid but wrong expression. Fixture note: `flink/normalization/event_sample.json` has moved to `flink/normalization/event_sample.json` (test resolves it via `Path(__file__).parents[3]`)
+- [x] Unit tests: one per row above, asserting the compiled expression AND that it evaluates correctly against a real event fixture - not just string equality, which would pass on a syntactically valid but wrong expression. Fixture note: the compiled expressions are evaluated against the captured events inlined in `tests/fixtures/events.py` - no test reads a capture file from disk, since captures are untracked (`.gitignore`'s `*_sample.*`)
 - [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_models.py` - 18 passed; full `make test` also verified (121 passed, `flink/normalization/models.py` 100% coverage, no regression)
 
 **Tests**: unit
@@ -353,7 +353,7 @@ Tasks: T20, T21, T22
 - [x] `envelope` covers `actor_id`, `actor_login`, `event_time` (with `as: timestamp`) - live-verified 2026-08-18, `event_time` correctly epoch-millis via `iso_to_millis`
 - [x] `common` covers `repo_id`, `repo_name`, `org_id`, `org_login`, `public` - re-verified 2026-08-18 by `/mentor-next`: the contract now emits `public` (`from: "public"`), matching `spec.md` exactly; the earlier `is_public` naming gap noted below has since been fixed in the code
 - [x] `org_id`/`org_login` come back null for an event whose payload has no `org`, verified against a real fixture (spec.md Edge Cases) - live-verified 2026-08-18
-- [x] Unit tests run a real event through `NormalizationEngine` and assert the envelope + common output, field by field - **closed 2026-08-19** (agent-authored, task level `deliver`): `tests/flink/normalization/test_contracts_github.py`, 17 tests + 4 subtests, driven through `NormalizationEngine` against the real captured sample (new `load_github_events_by_type()` helper in `tests/fixtures/events.py`, so tests read the captured traffic instead of duplicating it). Envelope identity, actor, both epoch-millis conversions, repo/org block, `public` as a real bool, null org fields on an org-less event, and absence of the raw-only fields are each asserted (`tests/flink/normalization/test_contracts_github.py`); `tests/fixtures/events.py`'s `GITHUB_EVENT` (a real captured `IssueCommentEvent`) is available to build it against, replacing the stale `flink/normalization/event_sample.json` reference
+- [x] Unit tests run a real event through `NormalizationEngine` and assert the envelope + common output, field by field - **closed 2026-08-19** (agent-authored, task level `deliver`): `tests/flink/normalization/test_contracts_github.py`, 17 tests + 4 subtests, driven through `NormalizationEngine` against real captured events (`SAMPLE_SHAPED_GITHUB_EVENTS` in `tests/fixtures/events.py`). Envelope identity, actor, both epoch-millis conversions, repo/org block, `public` as a real bool, null org fields on an org-less event, and absence of the raw-only fields are each asserted (`tests/flink/normalization/test_contracts_github.py`); `tests/fixtures/events.py`'s `GITHUB_EVENT` (a real captured `IssueCommentEvent`) is the fixture it is built against
 - [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_contracts_github.py` - 17 passed, 4 subtests (2026-08-19); full `make test` also verified - 155 passed, no regression
 
 **Tests**: unit
@@ -366,7 +366,7 @@ Tasks: T20, T21, T22
 **What**: `event_types` entries for `IssueCommentEvent`, `PullRequestEvent`, `PullRequestReviewEvent`, and `PullRequestReviewCommentEvent` - the four whose field mapping was verified against real traffic.
 **Where**: `flink/normalization/config/sources/github.yml`
 **Depends on**: T12
-**Reuses**: `flink/normalization/event_sample.json` holds a real instance of each of these four; `spec.md`'s per-type curated-field rows are the binding spec
+**Reuses**: `tests/fixtures/events.py`'s `SAMPLE_SHAPED_GITHUB_EVENTS` holds a real captured instance of each of these four; `spec.md`'s per-type curated-field rows are the binding spec
 **Requirement**: FLK-06
 
 **Tools**: MCP: NONE / Skill: NONE
@@ -376,7 +376,7 @@ Tasks: T20, T21, T22
 - [x] `issue_labels` is a list of label names, not label objects (`take: name`) - live-verified 2026-08-19 against the real sample: `['area/kubelet', 'sig/node', 'kind/feature', 'needs-triage']`
 - [x] `issue_is_pull_request` is a real boolean reflecting presence/absence of `issue.pull_request` - live-verified 2026-08-19 both ways: `True` with the key injected, `False` with it removed. This is the one field where `as: boolean`'s presence-check semantics are the correct reading (unlike `public`, see T12)
 - [x] `label_name` is null when `payload.label` is absent - live-verified 2026-08-19: `'needs-triage'` on the real `PullRequestEvent`, `None` with `payload.label` removed
-- [x] Unit tests use the real fixture for each type, driven through `NormalizationEngine` (the renamed `NormalizationEngine`, kept here as the historical name) - **closed 2026-08-19** (agent-authored, task level `deliver`): `tests/flink/normalization/test_contracts_github.py`, 17 tests + 4 subtests, driven through `NormalizationEngine` against the real captured sample (new `load_github_events_by_type()` helper in `tests/fixtures/events.py`, so tests read the captured traffic instead of duplicating it). Field sets asserted as exact set equality per type, so an extra or missing field fails. A guard test asserts the fixture still carries all four types, so the subTest loop cannot pass empty
+- [x] Unit tests use the real fixture for each type, driven through `NormalizationEngine` (the renamed `NormalizationEngine`, kept here as the historical name) - **closed 2026-08-19** (agent-authored, task level `deliver`): `tests/flink/normalization/test_contracts_github.py`, 17 tests + 4 subtests, driven through `NormalizationEngine` against real captured events (`SAMPLE_SHAPED_GITHUB_EVENTS` in `tests/fixtures/events.py`). Field sets asserted as exact set equality per type, so an extra or missing field fails. A guard test asserts the fixture still carries all four types, so the subTest loop cannot pass empty
 - [x] Gate check passes: `python -B -m pytest -s -vv --log-cli-level=INFO tests/flink/normalization/test_contracts_github.py` - 17 passed, 4 subtests (2026-08-19); full `make test` also verified - 155 passed, no regression
 
 **Tests**: unit
@@ -521,10 +521,10 @@ Tasks: T20, T21, T22
 
 ### T20: Capture real-traffic sample for the 6 remaining event types
 
-**What**: Run the ingestion service (or a throwaway script against the GitHub Events API) long enough to capture at least one real instance of `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, and - best-effort - `SponsorshipEvent`. Mirrors the process that produced `flink/normalization/event_sample.json`.
-**Where**: `tmp/event_sample_extended.json`
+**What**: Run the ingestion service (or a throwaway script against the GitHub Events API) long enough to capture at least one real instance of `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, and - best-effort - `SponsorshipEvent`. Mirrors the process that produced the original local capture behind the 4 verified types.
+**Where**: `tmp/event_sample_extended.json` (a local capture - untracked, like every `*_sample.*`); whatever the tests need gets inlined into `tests/fixtures/events.py`
 **Depends on**: T19
-**Reuses**: The same capture method behind `flink/normalization/event_sample.json`
+**Reuses**: The same capture method behind the original local capture
 **Requirement**: FLK-13
 
 **Tools**: MCP: NONE / Skill: NONE

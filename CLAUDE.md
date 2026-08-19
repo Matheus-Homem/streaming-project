@@ -35,7 +35,7 @@ Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifi
 
 ## Temporary files
 
-Any temporary file related to this project (scratch scripts, packaged archives, exported samples, etc.) goes in `tmp/` at the repo root - not the harness's scratchpad, not `/tmp`. `tmp/` already holds working artifacts like `sample_analysis.py`, `event_sample.json`, `dedup_challenge.ipynb`.
+Any temporary file related to this project (scratch scripts, packaged archives, exported samples, etc.) goes in `tmp/` at the repo root - not the harness's scratchpad, not `/tmp`. `tmp/` already holds working artifacts like `sample_analysis.py`, `dedup_challenge.ipynb`, `action_plan.md`.
 
 ## Dev commands
 

@@ -99,7 +99,7 @@
 6. IF a message fails to deserialize as valid JSON, is missing a required envelope field, or has a `schema_version` other than `1` THEN the job SHALL log the failure (including `event_id` when parseable) and skip that message without stopping the job.
 7. The job SHALL reach all GitHub-specific field extraction through the `NormalizationEngineBase` port, satisfied by the single source-agnostic `NormalizationEngine` reading a per-source declarative contract - the job's core pipeline SHALL NOT contain GitHub-specific branching itself (`AD-004`). **Revised 2026-08-19**: the original wording named `GitHubNormalizer` as the sole concrete implementation, which `AD-006` superseded - GitHub knowledge now lives entirely in `flink/normalization/config/sources/github.yml`, and no GitHub-named Python class exists. The requirement (no source-specific branching in the pipeline) is unchanged and is enforced by a test asserting the module contains no GitHub vocabulary.
 
-**Independent Test**: Feed each of the 11 mapped event types (from `flink/normalization/event_sample.json` where available, hand-built fixtures otherwise) through the job and confirm the published `events-normalized` message matches its table row exactly; feed one of the 6 unmapped types and confirm it publishes with an empty GitHub-specific block instead of being dropped; feed a malformed message and confirm it's logged and skipped without crashing the job.
+**Independent Test**: Feed each of the 11 mapped event types (from `tests/fixtures/events.py`'s `SAMPLE_SHAPED_GITHUB_EVENTS` where real captured traffic exists, its hand-built `DOC_SHAPED_GITHUB_EVENTS` otherwise) through the job and confirm the published `events-normalized` message matches its table row exactly; feed one of the 6 unmapped types and confirm it publishes with an empty GitHub-specific block instead of being dropped; feed a malformed message and confirm it's logged and skipped without crashing the job.
 
 ---
 
@@ -141,7 +141,7 @@
 
 | `source_event_type` | Source of mapping | Curated fields (from `payload`) |
 | --- | --- | --- |
-| `IssueCommentEvent` | Verified (`flink/normalization/event_sample.json`) | `action`; `issue_id`, `issue_number`, `issue_title`, `issue_state`, `issue_created_at`, `issue_updated_at`, `issue_comments_count` (from `issue.comments`), `issue_is_pull_request` (bool: `issue.pull_request` key present), `issue_user_login`, `issue_labels` (list of `issue.labels[].name`); `comment_id`, `comment_body`, `comment_user_login`, `comment_created_at`, `comment_updated_at` |
+| `IssueCommentEvent` | Verified (real traffic, `tests/fixtures/events.py`) | `action`; `issue_id`, `issue_number`, `issue_title`, `issue_state`, `issue_created_at`, `issue_updated_at`, `issue_comments_count` (from `issue.comments`), `issue_is_pull_request` (bool: `issue.pull_request` key present), `issue_user_login`, `issue_labels` (list of `issue.labels[].name`); `comment_id`, `comment_body`, `comment_user_login`, `comment_created_at`, `comment_updated_at` |
 | `PullRequestEvent` | Verified | `action`, `pr_number`, `pr_id`; `pr_base_ref`, `pr_base_sha`, `pr_base_repo_id`, `pr_base_repo_name`; `pr_head_ref`, `pr_head_sha`, `pr_head_repo_id`, `pr_head_repo_name`; `label_name` (nullable, from `payload.label.name`), `labels` (list of `payload.labels[].name`) |
 | `PullRequestReviewEvent` | Verified | `action`, `pr_number`, `pr_id`, `pr_base_ref`, `pr_head_ref`; `review_id`, `review_state`, `review_body`, `review_submitted_at`, `review_user_login` |
 | `PullRequestReviewCommentEvent` | Verified | `action`, `pr_number`, `pr_id`, `pr_base_ref`, `pr_head_ref`; `comment_id`, `comment_body`, `comment_path`, `comment_position`, `comment_diff_hunk`, `comment_commit_id`, `comment_created_at`, `comment_updated_at`, `comment_user_login` |
@@ -165,7 +165,7 @@
 
 **Acceptance Criteria**:
 
-1. The developer SHALL capture a real-traffic sample containing at least one instance of each of the 6 remaining event types, using the same method that produced `flink/normalization/event_sample.json`.
+1. The developer SHALL capture a real-traffic sample containing at least one instance of each of the 6 remaining event types, using the same method that produced the original local capture behind the 4 verified types.
 2. WHEN the sample confirms a type's real payload shape THEN the Normalization Mapping table SHALL be extended with that type's curated fields, following the same noise-filtering convention as the 11 already-mapped types (drop `avatar_url`, `gravatar_id`, redundant `*_url` fields; keep identifying/content fields).
 3. WHEN the GitHub contract gains an `event_types` entry for a newly-mapped type THEN messages of that type SHALL stop falling into the P1 AC5 empty-fallback path and SHALL produce populated GitHub-specific fields.
 4. IF real-traffic capture does not yield a `SponsorshipEvent` sample within a reasonable observation window (GitHub Sponsors events are rare on the public feed) THEN that type MAY remain on the empty-envelope fallback, documented as a known gap rather than blocking the rest of this story.
