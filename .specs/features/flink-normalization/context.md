@@ -40,21 +40,21 @@ Build the first Flink consumer of `events-raw`: a PyFlink job that flattens raw 
 
 ### Architecture: pluggable normalizer (AD-004)
 
-- The Flink job calls the `NormalizationEngineBase` port (ABC), mirroring `ingestion/ports.py`'s `IngestionClientBase`/`IngestionEngineBase`/`IngestionProducerBase` pattern. Per `AD-006` the only concrete implementation is the source-agnostic `NormalizationEngine`; per-source knowledge lives in YAML contracts, not in a class per source.
+- The Flink job calls a `Normalizer` port (ABC), mirroring `ingestion/ports.py`'s `IngestionClientBase`/`IngestionEngineBase`/`IngestionPublisherBase` pattern. `GitHubNormalizer` is the only concrete implementation this feature builds.
 - Triggered by the user's long-term intent to grow this project into an API-agnostic real-time ingestion/analytics platform (register arbitrary APIs - not just GitHub/GitLab - and stream/aggregate their events). Recorded as a formal project-wide decision in `.specs/STATE.md` (`AD-004`), not just a local choice for this feature.
 - Consequence for the normalized schema: it splits into a **domain-neutral envelope** (`source`, `event_id`, `event_type`, `actor`, `observed_at`, `schema_version`, `partition_key`) that any future source would populate the same way, plus a **source-specific fields block** where GitHub's `repo_name`, `repo_id`, `org_login`, and all the per-event-type curated fields live. The envelope never encodes VCS-specific vocabulary at the top level.
 
 ### Partition key
 
-- `events-normalized` is keyed by the generic `partition_key` field; the GitHub contract's `partition_key` rule populates it from `repo.name`. Resolves the "message key" item the `streaming-ingestion` spec explicitly deferred ("must be decided before Flink windowing... relies on ordering per key") - this is that moment, ahead of the next feature (windowed aggregation) needing it.
+- `events-normalized` is keyed by the generic `partition_key` field; `GitHubNormalizer` populates it with `repo_name`. Resolves the "message key" item the `streaming-ingestion` spec explicitly deferred ("must be decided before Flink windowing... relies on ordering per key") - this is that moment, ahead of the next feature (windowed aggregation) needing it.
 
 ### Event type coverage sequencing
 
 GitHub has 17 `GitHubEventType` values. Coverage splits by how the field mapping was sourced:
 
-- **4 verified from real traffic** (a local capture, untracked by `.gitignore`'s `*_sample.*`; the four events themselves are inlined in `tests/fixtures/events.py` as `SAMPLE_SHAPED_GITHUB_EVENTS`): `PullRequestEvent`, `IssueCommentEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`.
+- **4 verified from real traffic** (`tmp/event_sample.json`): `PullRequestEvent`, `IssueCommentEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`.
 - **7 resolved from official GitHub Events API docs**, cross-checked against sample-verified nested shapes (`issue`, `user`, `label` objects already known from the 4 verified types): `WatchEvent`, `CreateEvent`, `DeleteEvent`, `PublicEvent`, `GollumEvent`, `IssuesEvent`, `MemberEvent`.
-- **6 remain unresolved** and are explicitly sequenced as a follow-up story within this same feature, not deferred to a separate feature: `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, `SponsorshipEvent`. Official docs proved unreliable for these (the Events API docs for `PushEvent` omit fields the user has seen in real traffic before; `SponsorshipEvent` isn't documented at all on the Events API reference page checked). The story captures real traffic samples first (same method that produced the original local capture), then maps from verified data - avoiding a repeat of the doc-vs-reality mismatch already caught during this session (webhook docs were initially and mistakenly used for `PushEvent` instead of Events API docs).
+- **6 remain unresolved** and are explicitly sequenced as a follow-up story within this same feature, not deferred to a separate feature: `PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, `SponsorshipEvent`. Official docs proved unreliable for these (the Events API docs for `PushEvent` omit fields the user has seen in real traffic before; `SponsorshipEvent` isn't documented at all on the Events API reference page checked). The story captures real traffic samples first (same method that produced `tmp/event_sample.json`), then maps from verified data - avoiding a repeat of the doc-vs-reality mismatch already caught during this session (webhook docs were initially and mistakenly used for `PushEvent` instead of Events API docs).
 - Until the 6 are mapped, events of those types still flow through: envelope populated, source-specific fields block empty/null (see Declined/Assumptions below) - not dropped.
 
 ### Agent's Discretion
@@ -74,7 +74,7 @@ GitHub has 17 `GitHubEventType` values. Coverage splits by how the field mapping
 ## Specific References
 
 - `AD-004` in `.specs/STATE.md` is the authoritative record of the API-agnostic-platform intent driving the pluggable-normalizer decision - read it before designing any future source integration.
-- The 4 verified event type mappings are backed by real captured traffic. The capture file itself is a local artifact and never enters the repo (`.gitignore`'s `*_sample.*`), so the events that tests need live inlined in `tests/fixtures/events.py` (`SAMPLE_SHAPED_GITHUB_EVENTS`); the 6-type follow-up story needs a fresh capture that actually contains those types, inlined the same way.
+- `tmp/event_sample.json` is the real-traffic sample backing the 4 verified event type mappings; the 6-type follow-up story should extend or replace it with a sample that actually contains those types.
 
 ---
 

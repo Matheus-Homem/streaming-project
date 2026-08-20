@@ -41,7 +41,7 @@ class IngestionProducerBase(ABC):
         """
 
 
-class IngestionTrackerBase(ABC):
+class UniqueTrackerBase(ABC):
 
     @abstractmethod
     def is_duplicated(self, value: str) -> bool:

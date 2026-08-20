@@ -1,9 +1,9 @@
 from collections import deque
 
-from ingestion.ports import IngestionTrackerBase
+from ingestion.ports import UniqueTrackerBase
 
 
-class IngestionTracker(IngestionTrackerBase):
+class BoundedUniqueTracker(UniqueTrackerBase):
 
     def __init__(self, max_size: int):
         self.deque = deque(maxlen=max_size)

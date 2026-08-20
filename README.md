@@ -6,7 +6,7 @@ See [`.specs/RFC.md`](.specs/RFC.md) for the full motivation and learning goals,
 
 ## Architecture
 
-**Today**: [`ingestion/`](ingestion/) polls the GitHub public events API, normalizes payloads into a `RawEvent` envelope ([Pydantic](https://docs.pydantic.dev/)), and publishes them to a single Kafka topic (`events-raw`, shared across sources — GitLab support exists as an unwired model stub). Local Kafka runs via [`infra/docker/docker-compose.yml`](infra/docker/docker-compose.yml) (3 controllers + 3 brokers + Kafka UI on `localhost:8080`).
+**Today**: [`ingestion/`](ingestion/) polls the GitHub public events API, normalizes payloads into a `RawEvent` envelope ([Pydantic](https://docs.pydantic.dev/)), and publishes them to a single Kafka topic (`events-raw`, shared across sources — GitLab support exists as an unwired model stub). Local Kafka runs via [`docker/docker-compose.yml`](docker/docker-compose.yml) (3 controllers + 3 brokers + Kafka UI on `localhost:8080`).
 
 **Planned, not yet built**: Flink jobs consuming `events-raw` for normalization/aggregation, OpenSearch as the metrics/search store, Grafana dashboards on top. See [`.specs/features/streaming-ingestion/spec.md`](.specs/features/streaming-ingestion/spec.md) for the ingestion feature's exact scope, and [`.specs/features/flink-normalization/`](.specs/features/flink-normalization/) for the normalization layer currently being planned.
 
@@ -23,8 +23,8 @@ GitHub Events API --> ingestion (client -> engine -> publisher) --> Kafka (event
 - [`ingestion/`](ingestion/) — the GitHub/GitLab ingestion service (client → engine → publisher → pipeline, wired by `app.py`)
 - [`shared/`](shared/) — cross-cutting utilities (`logger.py` for per-module logging setup, `timer.py` for `RetryTimer` backoff)
 - [`tests/`](tests/) — mirrors `ingestion/`/`shared/` 1:1, one test file per source module
-- [`infra/docker/`](infra/docker/) — local infra (`docker-compose.yml`, topic-init script) — moved here from `docker/`
-- [`flink/`](flink/) — the Flink normalization job, in progress
+- [`docker/`](docker/) — local infra (`docker-compose.yml`)
+- [`flink/`](flink/), [`infra/`](infra/) — scaffolding for future work, currently empty
 - [`.specs/`](.specs/) — the spec-driven workflow: `RFC.md` (why this project exists), `STATE.md` (decisions + handoff), `features/[name]/` (spec, tasks, validation per feature)
 
 ## Requirements
@@ -37,12 +37,8 @@ GitHub Events API --> ingestion (client -> engine -> publisher) --> Kafka (event
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements/dev.txt
+pip install -r requirements.txt
 ```
-
-Dependencies are split by target under [`requirements/`](requirements/): `base.txt` (shared runtime),
-`ingestion.txt` and `flink.txt` (per-service runtime, what each Docker image installs), and `dev.txt`
-(everything plus the `make test` / `make neat` tooling).
 
 All `make` targets below assume `.venv` is activated — the Makefile calls bare `pytest`/`python`/`autoflake`/`isort`/`black`, which resolve to `.venv/bin` only while it's active.
 

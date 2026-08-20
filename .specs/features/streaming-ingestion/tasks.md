@@ -104,12 +104,12 @@ T5
 
 ### T2: Detect GitHub rate-limit responses in the client
 
-**What**: `IngestionClient.get_events()` distinguishes a rate-limited GitHub response (status `403`/`429` with `X-RateLimit-Remaining: 0`, or whatever combination GitHub's docs specify for the events endpoint) from other HTTP errors, and raises a dedicated, source-agnostic exception (e.g. `RateLimitError`, not `GitHubRateLimitError` - this codebase is multi-source by design, see `RawEvent.source` in `shared/models.py`; a GitLab client will hit the same condition later and should raise the same exception type) instead of the generic `HTTPError`. *(`SourceType` no longer exists post yaml-driven-source-config refactor - `RawEvent.source` is now a plain `str`, `SourceConfig.source`, resolved from `ingestion/config/sources.yml`)*
+**What**: `IngestionClient.get_events()` distinguishes a rate-limited GitHub response (status `403`/`429` with `X-RateLimit-Remaining: 0`, or whatever combination GitHub's docs specify for the events endpoint) from other HTTP errors, and raises a dedicated, source-agnostic exception (e.g. `RateLimitError`, not `GitHubRateLimitError` - this codebase is multi-source by design, see `RawEvent.source`/`SourceType` in `models.py`; a GitLab client will hit the same condition later and should raise the same exception type) instead of the generic `HTTPError`.
 **Where**: `ingestion/adapters/client.py` (path updated post-refactor; originally `ingestion/client.py`)
 **Depends on**: T1
 **Reuses**: existing `try/except` structure in `get_events()`
 
-**Design note (why this shape):** the client's job stays "fetch and signal what happened" - it does not sleep or retry itself. The poll loop from T1 already catches any exception from the pipeline and backs off; a dedicated exception type just lets that same generic backoff path treat a rate limit correctly (no immediate retry) without the client and the loop both trying to own retry policy. The exception name stays source-agnostic (not `GitHubRateLimitError`) for the same reason `RawEvent` carries a `source` field instead of per-source subclasses - a source attribute on the exception instance differentiates GitHub from GitLab, not the class name.
+**Design note (why this shape):** the client's job stays "fetch and signal what happened" - it does not sleep or retry itself. The poll loop from T1 already catches any exception from the pipeline and backs off; a dedicated exception type just lets that same generic backoff path treat a rate limit correctly (no immediate retry) without the client and the loop both trying to own retry policy. The exception name stays source-agnostic (not `GitHubRateLimitError`) for the same reason `RawEvent` carries a `source` field instead of per-source subclasses - a `SourceType`/source attribute on the exception instance differentiates GitHub from GitLab, not the class name.
 
 **Tools**:
 
