@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from logging import getLogger
 from typing import Any
 
@@ -7,6 +7,8 @@ from pydantic import ValidationError
 from ingestion.models import EventModel, SourceConfig
 from ingestion.ports import IngestionEngineBase
 from shared.models import RawEvent
+
+RAW_EVENT_SCHEMA_VERSION = 1
 
 
 class IngestionEngine(IngestionEngineBase):
@@ -41,8 +43,8 @@ class IngestionEngine(IngestionEngineBase):
                 source_event_id=formatted_event.id,
                 source_event_endpoint=self.source_config.variant,
                 source_event_type=formatted_event.type,
-                observed_at=datetime.now().isoformat(),
-                schema_version=1,
+                observed_at=datetime.now(timezone.utc).isoformat(),
+                schema_version=RAW_EVENT_SCHEMA_VERSION,
                 payload=formatted_event.model_dump(mode="json"),
             )
             for formatted_event in formatted_events

@@ -1,0 +1,4 @@
+-r base.txt
+
+# Direct
+jmespath==1.1.0
