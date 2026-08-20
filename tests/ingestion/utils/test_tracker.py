@@ -1,13 +1,13 @@
 import unittest
 from collections import deque
 
-from ingestion.adapters.tracker import IngestionTracker
+from ingestion.utils.tracker import BoundedUniqueTracker
 
 
-class TestIngestionTracker(unittest.TestCase):
+class TestBoundedUniqueTracker(unittest.TestCase):
 
     def _get_tracker(self, max_size: int = 200):
-        return IngestionTracker(max_size)
+        return BoundedUniqueTracker(max_size)
 
     def test_initialize(self):
         max_size = 100
