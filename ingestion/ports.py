@@ -4,7 +4,8 @@ from typing import Any
 from shared.models import RawEvent
 
 
-class IngestionClientBase(ABC):
+class IngestionClientPort(ABC):
+    """Fetches raw events from a source-specific API."""
 
     @abstractmethod
     def get_events(self) -> list[dict[str, Any]]:
@@ -16,7 +17,8 @@ class IngestionClientBase(ABC):
         """
 
 
-class IngestionEngineBase(ABC):
+class IngestionEnginePort(ABC):
+    """Normalizes raw source-specific events into the Raw layer envelope."""
 
     @abstractmethod
     def process(self, events: list[dict[str, Any]]) -> list[RawEvent]:
@@ -30,7 +32,8 @@ class IngestionEngineBase(ABC):
         """
 
 
-class IngestionProducerBase(ABC):
+class IngestionProducerPort(ABC):
+    """Publishes standardized events to the ingestion topic."""
 
     @abstractmethod
     def publish(self, events: list[RawEvent]) -> None:
@@ -41,7 +44,8 @@ class IngestionProducerBase(ABC):
         """
 
 
-class IngestionTrackerBase(ABC):
+class IngestionTrackerPort(ABC):
+    """Tracks which events have already been processed to prevent duplicates."""
 
     @abstractmethod
     def is_duplicated(self, value: str) -> bool:
