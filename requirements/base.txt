@@ -1,6 +1,7 @@
 # Direct
 pydantic==2.13.4
 PyYAML==6.0.3
+python-dotenv==1.2.2
 
 # Transitive (pydantic)
 annotated-types==0.7.0

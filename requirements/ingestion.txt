@@ -2,7 +2,6 @@
 
 # Direct
 kafka-python==3.0.8
-python-dotenv==1.2.2
 requests==2.34.2
 
 # Transitive (requests)
