@@ -57,10 +57,19 @@ class NormalizedEvent(BaseModel):
 
 
 class EventEvaluator(ABC):
+    """Applies a normalization contract's rules to a raw event's payload."""
 
     def __init__(self, class_name: str):
         self.logger = getLogger(class_name)
 
     @abstractmethod
     def apply(self, event: RawEvent, contract: NormalizationContract) -> dict[str, Any]:
-        """Aplica as regras do contrato sobre o payload do evento."""
+        """Apply the contract's rules to the event's payload.
+
+        Args:
+            event (RawEvent): Raw event whose payload will be evaluated.
+            contract (NormalizationContract): Contract defining the rules to apply.
+
+        Returns:
+            dict[str, Any]: The normalized fields produced by the contract's rules.
+        """
