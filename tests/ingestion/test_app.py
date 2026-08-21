@@ -137,7 +137,9 @@ class TestMain(unittest.TestCase):
         mock_build_arguments.assert_not_called()
         mock_configure_pipeline.assert_not_called()
 
-    @patch.dict(os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"})
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
     @patch("ingestion.app.build_arguments")
