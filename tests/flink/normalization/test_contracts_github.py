@@ -1,25 +1,27 @@
 import copy
+from datetime import datetime, timezone
+from pathlib import Path
 from unittest import TestCase
 
-from flink.normalization.adapters import (
-    NormalizationEngine,
-    NormalizationJmespathEvaluator,
-)
+import flink.normalization
+from flink.normalization.adapters.contract_repository import YamlContractRepository
+from flink.normalization.domain.evaluator import NormalizationRulesEventEvaluator
+from flink.normalization.domain.normalizer import EventNormalizer
 from shared.models import RawEvent
-from tests.fixtures.events import (
-    DOC_SHAPED_GITHUB_EVENTS,
-    SAMPLE_SHAPED_GITHUB_EVENTS,
-)
+from tests.fixtures.events import DOC_SHAPED_GITHUB_EVENTS, SAMPLE_SHAPED_GITHUB_EVENTS
+
+CONTRACTS_DIR = Path(flink.normalization.__file__).parent / "sources"
 
 OBSERVED_AT = "2026-07-17T12:21:32+00:00"
 OBSERVED_AT_MILLIS = 1784290892000
+OBSERVED_AT_DATETIME = datetime(2026, 7, 17, 12, 21, 32, tzinfo=timezone.utc)
 
 ENVELOPE_FIELDS = {
     "source",
     "event_id",
     "event_type",
-    "actor_id",
-    "actor_login",
+    "entity_id",
+    "entity_name",
     "event_time",
     "ingested_at",
     "schema_version",
@@ -128,12 +130,13 @@ class GithubContractTestCase(TestCase):
         cls.events = copy.deepcopy(SAMPLE_SHAPED_GITHUB_EVENTS)
 
     def setUp(self):
-        self.engine = NormalizationEngine(
-            evaluator=NormalizationJmespathEvaluator(),
+        self.normalizer = EventNormalizer(
+            event_evaluator=NormalizationRulesEventEvaluator(),
+            contract_repository=YamlContractRepository(contracts_dir=CONTRACTS_DIR),
         )
 
     def normalize(self, event: dict) -> dict:
-        return self.engine.normalize(
+        return self.normalizer.normalize(
             RawEvent(
                 source="github",
                 source_event_id=str(event["id"]),
@@ -143,7 +146,7 @@ class GithubContractTestCase(TestCase):
                 schema_version=1,
                 payload=event,
             )
-        )
+        ).model_dump()
 
 
 class TestGithubContractEnvelopeAndCommon(GithubContractTestCase):
@@ -162,12 +165,17 @@ class TestGithubContractEnvelopeAndCommon(GithubContractTestCase):
         self.assertEqual(self.result["event_type"], "IssueCommentEvent")
         self.assertEqual(self.result["schema_version"], 1)
 
-    def test_can_resolve_actor_from_the_payload_root(self):
-        self.assertEqual(self.result["actor_id"], self.event["actor"]["id"])
-        self.assertEqual(self.result["actor_login"], self.event["actor"]["login"])
+    def test_can_resolve_entity_from_the_payload_root(self):
+        # entity_id/entity_name (renamed 2026-08-19 from actor_id/actor_login) - same source
+        # values, generalized envelope field names. entity_id is cast to str by NormalizedEvent.
+        self.assertEqual(self.result["entity_id"], str(self.event["actor"]["id"]))
+        self.assertEqual(self.result["entity_name"], self.event["actor"]["login"])
 
     def test_can_convert_both_timestamps_to_epoch_millis(self):
-        self.assertEqual(self.result["ingested_at"], OBSERVED_AT_MILLIS)
+        # ingested_at is typed `datetime` on NormalizedEvent, so the epoch-millis int
+        # `to_millis()` produces gets coerced into a real datetime by Pydantic - flagged in
+        # `.specs/STATE.md` (2026-08-19) as a discrepancy from spec.md FLK-09's plain-int wording.
+        self.assertEqual(self.result["ingested_at"], OBSERVED_AT_DATETIME)
         self.assertIsInstance(self.result["event_time"], int)
 
     def test_can_resolve_common_repo_and_org_block(self):
