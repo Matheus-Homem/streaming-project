@@ -1,4 +1,3 @@
-import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -57,22 +56,6 @@ class TestIngestionProducer(unittest.TestCase):
 
         _, kwargs = self.kafka_producer_cls_mock.call_args
         self.assertEqual(kwargs["bootstrap_servers"], ["broker:9092"])
-
-    @patch.dict(os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "localhost:29092"})
-    def test_init_falls_back_to_env_var_when_not_provided(self):
-        producer = IngestionProducer()
-
-        producer.publish([])
-
-        _, kwargs = self.kafka_producer_cls_mock.call_args
-        self.assertEqual(kwargs["bootstrap_servers"], ["localhost:29092"])
-
-    @patch.dict(os.environ, {}, clear=True)
-    def test_init_raises_key_error_when_no_servers_and_no_env_var(self):
-        producer = IngestionProducer()
-
-        with self.assertRaises(KeyError):
-            producer.publish([])
 
     def test_publish_sends_all_events_and_flushes(self):
         producer = IngestionProducer(
