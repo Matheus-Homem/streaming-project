@@ -28,4 +28,4 @@ kafka-up:
 
 kafka-down:
 	@echo "🛑 Stopping Kafka docker environment..."
-	@docker compose -f infra/docker/docker-compose.yml down
+	@docker compose -f infra/docker/docker-compose.yml down --remove-orphans
