@@ -50,3 +50,7 @@ Any temporary file related to this project (scratch scripts, packaged archives, 
 ## Code conventions
 
 See `.claude/rules/python-conventions.md` (loads automatically on `.py` files) and `.claude/rules/flink-contract-dsl.md` (Flink normalization contract-compiler gotchas, loads on `flink/normalization/**`).
+
+<!-- BEGIN technical-learning-mentor -->
+@.claude/mentor-design-pairing.md
+<!-- END technical-learning-mentor -->
