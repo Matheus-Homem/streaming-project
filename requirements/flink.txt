@@ -2,3 +2,4 @@
 
 # Direct
 jmespath==1.1.0
+apache-flink==2.3.0
