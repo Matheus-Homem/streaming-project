@@ -1,12 +1,11 @@
 import json
-import os
 from logging import getLogger
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from kafka.serializer import Serializer
 
-from ingestion.ports import IngestionProducerBase
+from ingestion.ports import IngestionProducerPort
 from shared.models import RawEvent
 
 
@@ -15,11 +14,11 @@ class JsonSerializer(Serializer):
         return json.dumps(value).encode("utf-8")
 
 
-class IngestionProducer(IngestionProducerBase):
+class IngestionProducer(IngestionProducerPort):
 
     def __init__(
         self,
-        bootstrap_servers: list[str] = None,
+        bootstrap_servers: list[str],
         topic: str = "events-raw",
     ):
         self.logger = getLogger(self.__class__.__name__)
@@ -29,9 +28,7 @@ class IngestionProducer(IngestionProducerBase):
 
     def _initialize_producer(self):
         self._producer = KafkaProducer(
-            bootstrap_servers=(
-                self._bootstrap_servers or [os.environ["KAFKA_BOOTSTRAP_SERVERS"]]
-            ),
+            bootstrap_servers=(self._bootstrap_servers),
             value_serializer=JsonSerializer(),
         )
 

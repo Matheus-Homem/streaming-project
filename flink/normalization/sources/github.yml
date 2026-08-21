@@ -1,0 +1,230 @@
+source: github
+partition_key:
+  from: repo.name
+
+envelope:
+  entity_id:
+    from: actor.id
+  entity_name:
+    from: actor.login
+  event_time:
+    from: created_at
+    as: timestamp
+
+common:
+  repo_id:
+    from: repo.id
+  repo_name:
+    from: repo.name
+  org_id:
+    from: org.id
+    default: null
+  org_login:
+    from: org.login
+    default: null
+  public:
+      from: "public"
+
+event_types:
+  WatchEvent:
+    action:
+      from: payload.action
+
+  IssueCommentEvent:
+    action:
+      from: payload.action
+    issue_id:
+      from: payload.issue.id
+    issue_number:
+      from: payload.issue.number
+    issue_title:
+      from: payload.issue.title
+    issue_state:
+      from: payload.issue.state
+    issue_created_at:
+      from: payload.issue.created_at
+      as: timestamp
+    issue_updated_at:
+      from: payload.issue.updated_at
+      as: timestamp
+    issue_comments_count:
+      from: payload.issue.comments
+    issue_user_login:
+      from: payload.issue.user.login
+    issue_labels:
+      from: payload.issue.labels
+      take: name
+    issue_is_pull_request:
+      from: payload.issue.pull_request
+      as: boolean
+    comment_id:
+      from: payload.comment.id
+    comment_body:
+      from: payload.comment.body
+    comment_user_login:
+      from: payload.comment.user.login
+    comment_created_at:
+      from: payload.comment.created_at
+      as: timestamp
+    comment_updated_at:
+      from: payload.comment.updated_at
+      as: timestamp
+
+  PullRequestEvent:
+    action:
+      from: payload.action
+    pr_number:
+      from: payload.pull_request.number
+    pr_id:
+      from: payload.pull_request.id
+    pr_base_ref:
+      from: payload.pull_request.base.ref
+    pr_base_sha:
+      from: payload.pull_request.base.sha
+    pr_base_repo_id:
+      from: payload.pull_request.base.repo.id
+    pr_base_repo_name:
+      from: payload.pull_request.base.repo.name
+    pr_head_ref:
+      from: payload.pull_request.head.ref
+    pr_head_sha:
+      from: payload.pull_request.head.sha
+    pr_head_repo_id:
+      from: payload.pull_request.head.repo.id
+    pr_head_repo_name:
+      from: payload.pull_request.head.repo.name
+    label_name:
+      from: payload.label.name
+      default: null
+    labels:
+      from: payload.labels
+      take: name
+
+  PullRequestReviewEvent:
+    action:
+      from: payload.action
+    pr_number:
+      from: payload.pull_request.number
+    pr_id:
+      from: payload.pull_request.id
+    pr_base_ref:
+      from: payload.pull_request.base.ref
+    pr_head_ref:
+      from: payload.pull_request.head.ref
+    review_id:
+      from: payload.review.id
+    review_state:
+      from: payload.review.state
+    review_body:
+      from: payload.review.body
+      default: null
+    review_submitted_at:
+      from: payload.review.submitted_at
+      as: timestamp
+    review_user_login:
+      from: payload.review.user.login
+
+  PullRequestReviewCommentEvent:
+    action:
+      from: payload.action
+    pr_number:
+      from: payload.pull_request.number
+    pr_id:
+      from: payload.pull_request.id
+    pr_base_ref:
+      from: payload.pull_request.base.ref
+    pr_head_ref:
+      from: payload.pull_request.head.ref
+    comment_id:
+      from: payload.comment.id
+    comment_body:
+      from: payload.comment.body
+    comment_path:
+      from: payload.comment.path
+    comment_position:
+      from: payload.comment.position
+      default: null
+    comment_diff_hunk:
+      from: payload.comment.diff_hunk
+    comment_commit_id:
+      from: payload.comment.commit_id
+    comment_created_at:
+      from: payload.comment.created_at
+      as: timestamp
+    comment_updated_at:
+      from: payload.comment.updated_at
+      as: timestamp
+    comment_user_login:
+      from: payload.comment.user.login
+  CreateEvent:
+    ref:
+      from: payload.ref
+      default: null
+    ref_type:
+      from: payload.ref_type
+    master_branch:
+      from: payload.master_branch
+    description:
+      from: payload.description
+      default: null
+    pusher_type:
+      from: payload.pusher_type
+
+  DeleteEvent:
+    ref:
+      from: payload.ref
+    ref_type:
+      from: payload.ref_type
+    pusher_type:
+      from: payload.pusher_type
+
+  PublicEvent: {}
+
+  GollumEvent:
+    pages:
+      expression: "payload.pages[].{page_name: page_name, title: title, summary: summary, action: action, sha: sha}"
+
+  IssuesEvent:
+    action:
+      from: payload.action
+    issue_id:
+      from: payload.issue.id
+    issue_number:
+      from: payload.issue.number
+    issue_title:
+      from: payload.issue.title
+    issue_state:
+      from: payload.issue.state
+    issue_created_at:
+      from: payload.issue.created_at
+      as: timestamp
+    issue_updated_at:
+      from: payload.issue.updated_at
+      as: timestamp
+    issue_comments_count:
+      from: payload.issue.comments
+    issue_user_login:
+      from: payload.issue.user.login
+    issue_labels:
+      from: payload.issue.labels
+      take: name
+    assignee_login:
+      from: payload.issue.assignee.login
+      default: null
+    assignees:
+      from: payload.issue.assignees
+      take: login
+    label_name:
+      from: payload.label.name
+      default: null
+    labels:
+      from: payload.labels
+      take: name
+
+  MemberEvent:
+    action:
+      from: payload.action
+    member_id:
+      from: payload.member.id
+    member_login:
+      from: payload.member.login

@@ -1,6 +1,6 @@
 services:
   controller-1:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: controller-1
     environment:
       KAFKA_NODE_ID: 1
@@ -12,7 +12,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
   controller-2:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: controller-2
     environment:
       KAFKA_NODE_ID: 2
@@ -24,7 +24,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
   controller-3:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: controller-3
     environment:
       KAFKA_NODE_ID: 3
@@ -36,7 +36,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
   broker-1:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: broker-1
     ports:
       - 29092:9092
@@ -56,7 +56,7 @@ services:
       - controller-3
 
   broker-2:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: broker-2
     ports:
       - 39092:9092
@@ -76,7 +76,7 @@ services:
       - controller-3
 
   broker-3:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: broker-3
     ports:
       - 49092:9092
@@ -95,9 +95,8 @@ services:
       - controller-2
       - controller-3
 
-
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     container_name: kafka-ui
     ports:
       - "8080:8080"
@@ -109,9 +108,8 @@ services:
       - broker-2
       - broker-3
 
-
   topic-init:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: topic-init
     depends_on:
       - broker-1
@@ -123,14 +121,49 @@ services:
 
   ingestion:
     build:
-      context: .
+      context: ../..
       dockerfile: ingestion/Dockerfile
     container_name: ingestion
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker-1:19092,broker-2:19092,broker-3:19092
     volumes:
     - ./scripts:/scripts:ro
     depends_on:
-      - topic-init
+      topic-init:
+        condition: service_completed_successfully
     command: ["python", "-m", "ingestion.app", "--source", "github"]
+
+  normalization:
+    build:
+      context: ../..
+      dockerfile: flink/normalization/Dockerfile
+    container_name: normalization
+    ports:
+      - "8081:8081"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker-1:19092,broker-2:19092,broker-3:19092
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: normalization
+    depends_on:
+      topic-init:
+        condition: service_completed_successfully
+
+  taskmanager:
+    build:
+      context: ../..
+      dockerfile: flink/normalization/Dockerfile
+    image: apache/flink:2.3
+    container_name: flink-taskmanager
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: normalization
+        taskmanager.numberOfTaskSlots: 4
+    depends_on:
+      - normalization
+
+
 
 volumes:
   kafka-data:

@@ -1,4 +1,5 @@
 import argparse
+import os
 import unittest
 from datetime import datetime
 from unittest.mock import Mock, patch
@@ -98,7 +99,7 @@ class TestConfigureIngestionPipeline(unittest.TestCase):
     def test_builds_pipeline_from_source_config(self):
         source_config = get_source_config("github")
 
-        pipeline = configure_ingestion_pipeline(source_config)
+        pipeline = configure_ingestion_pipeline(source_config, ["broker:9092"])
 
         self.assertIsInstance(pipeline.client, IngestionClient)
         self.assertIsInstance(pipeline.engine, IngestionEngine)
@@ -109,7 +110,7 @@ class TestConfigureIngestionPipeline(unittest.TestCase):
             "github", "organization", {"org": "anthropics"}
         )
 
-        pipeline = configure_ingestion_pipeline(source_config)
+        pipeline = configure_ingestion_pipeline(source_config, ["broker:9092"])
 
         self.assertIs(pipeline.client.source_config, source_config)
         self.assertIs(pipeline.engine.source_config, source_config)
@@ -119,6 +120,46 @@ class TestConfigureIngestionPipeline(unittest.TestCase):
 
 
 class TestMain(unittest.TestCase):
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("ingestion.app.RetryTimer")
+    @patch("ingestion.app.configure_ingestion_pipeline")
+    @patch("ingestion.app.build_arguments")
+    def test_raises_key_error_when_bootstrap_servers_env_var_is_missing(
+        self,
+        mock_build_arguments,
+        mock_configure_pipeline,
+        mock_retry_timer,
+    ):
+        with self.assertRaises(KeyError):
+            main()
+
+        mock_build_arguments.assert_not_called()
+        mock_configure_pipeline.assert_not_called()
+
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
+    @patch("ingestion.app.RetryTimer")
+    @patch("ingestion.app.configure_ingestion_pipeline")
+    @patch("ingestion.app.build_arguments")
+    def test_splits_bootstrap_servers_env_var_and_passes_it_to_the_pipeline(
+        self,
+        mock_build_arguments,
+        mock_configure_pipeline,
+        mock_retry_timer,
+    ):
+        mock_build_arguments.return_value = _args()
+        pipeline = Mock()
+        pipeline.execute.side_effect = KeyboardInterrupt()
+        mock_configure_pipeline.return_value = pipeline
+        mock_retry_timer.return_value = Mock()
+
+        with self.assertRaises(KeyboardInterrupt):
+            main()
+
+        bootstrap_servers = mock_configure_pipeline.call_args.args[1]
+        self.assertEqual(bootstrap_servers, ["broker-1:19092", "broker-2:19092"])
 
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")

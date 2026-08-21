@@ -16,7 +16,7 @@ The streaming project needs a continuously running service that pulls public Git
 | ------- | ------ |
 | OpenSearch + Grafana (Epic 1, Story 3) | Separate feature; ingestion doesn't depend on it |
 | Flink normalization/aggregation (Epic 3, 4) | Separate feature; consumes this topic, doesn't affect ingestion itself |
-| GitLab ingestion | `GitLabEvent`/`SourceType.GITLAB` exist as a stub (`id` field only) but no client/engine path is exercised for it; treated as scaffolding for a future source, not a working capability |
+| GitLab ingestion | A `gitlab` entry exists in `ingestion/config/sources.yml` (endpoints/headers/`id_field`/`type_field`) but no client/engine run has been exercised against it; treated as scaffolding for a future source, not a working capability |
 | Kubernetes / Drone / Terraform | RFC marks these "if there's an opportunity" - not tied to this feature |
 | Kafka topic creation automation | Topics currently rely on broker auto-creation; explicit topic provisioning (partitions, retention, replication) is infra work, not ingestion-service work |
 
@@ -32,13 +32,15 @@ The streaming project needs a continuously running service that pulls public Git
 
 **Open questions:** none outside the table above - all resolved to a default or deferred explicitly.
 
+**Post-Verified note (2026-08-17):** after this feature's requirements were Verified, `refactor/yaml-driven-source-config` (PR #5, not run through this spec-driven workflow) replaced the source-specific typed models (`GitHubEvent`, `GitLabEvent`, `SourceType`, `SOURCE_REGISTRY`) with a generic, YAML-declared `SourceConfig`/`EventModel` (`ingestion/config/sources.yml`, `ingestion/models.py`). The behavior the ACs above describe still holds; the file paths, class names, and CLI args (`--endpoint`/`--param` replacing `owner`/`repo`/`org`) have been updated to match. No requirement ID or traceability status below changed as a result - the refactor was a reimplementation of already-Verified behavior, not a new requirement.
+
 ---
 
 ## Implicit-Requirement Dimensions Sweep
 
 | Dimension | Status |
 | --- | --- |
-| Input validation & bounds | Covered (P1) - `GitHubEvent` (pydantic) rejects malformed payloads; invalid events are skipped and logged, not fatal |
+| Input validation & bounds | Covered (P1) - the generic `EventModel` (pydantic, `extra="allow"`) rejects malformed payloads once `SourceConfig.get_event_id`/`get_event_type` resolve `id`/`type` from the YAML-declared dotted paths; invalid events are skipped and logged, not fatal |
 | Failure / partial-failure states | **Gap found**: `app.py`'s `while True` loop has no try/except around `execute()`. Any unhandled exception (GitHub down, Kafka down) currently crashes the whole process instead of retrying the next poll. → P2 |
 | Idempotency / retry / duplicate handling | Not implemented. No tracking of previously-seen `source_event_id`; GitHub's public events feed can return overlapping events across polls. → P2 |
 | Auth boundaries & rate limits | Not implemented. Anonymous GitHub API calls are capped at 60 req/hour; no rate-limit detection or backoff exists. → P2 |
@@ -60,11 +62,11 @@ The streaming project needs a continuously running service that pulls public Git
 
 **Acceptance Criteria**:
 
-1. The system SHALL provide a 3-controller/3-broker Kafka cluster defined in `docker/docker-compose.yml`, reachable on the host via `localhost:29092`, `localhost:39092`, `localhost:49092`.
+1. The system SHALL provide a 3-controller/3-broker Kafka cluster defined in `infra/docker/docker-compose.yml` (moved from `docker/docker-compose.yml` per `AD-005`), reachable on the host via `localhost:29092`, `localhost:39092`, `localhost:49092`.
 2. WHEN the compose stack is started THEN Kafka UI SHALL be reachable at `localhost:8080` and list the cluster's brokers via `KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS`.
 3. The system SHALL start brokers only after their declared controller dependencies (`depends_on`) are up.
 
-**Independent Test**: `docker compose -f docker/docker-compose.yml up`, then open `localhost:8080` and confirm the cluster and its 3 brokers appear.
+**Independent Test**: `docker compose -f infra/docker/docker-compose.yml up`, then open `localhost:8080` and confirm the cluster and its 3 brokers appear.
 
 ---
 
@@ -74,24 +76,24 @@ The streaming project needs a continuously running service that pulls public Git
 
 **Why P1**: This is the actual data entry point of the whole project; every other epic depends on it existing.
 
-**Acceptance Criteria**:
+**Acceptance Criteria** *(superseded 2026-08-17 by the `refactor/yaml-driven-source-config` merge, PR #5 - source shape moved from hardcoded per-source client logic + typed `GitHubEvent`/`SourceType` models to a YAML-declared, generic config. AC text below reflects the current implementation; the `owner`/`repo`/`org`-routing/`ValueError` behavior and the `GitHubEvent` pydantic model this story originally shipped with no longer exist)*:
 
-1. WHEN `IngestionClient.get_events()` is called with no `owner`/`repo`/`org` THEN the client SHALL `GET https://api.github.com/events` and return the parsed JSON list. *(`ingestion/client.py:39-45`, `tests/ingestion/test_client.py`)*
-2. WHEN `owner` and `repo` are both provided and `org` is not THEN the client SHALL request `https://api.github.com/networks/{owner}/{repo}/events`.
-3. WHEN `org` is provided alone THEN the client SHALL request `https://api.github.com/orgs/{org}/events`.
-4. IF the `owner`/`repo`/`org` combination is invalid (exactly one of `owner`/`repo` set, or `org` combined with either) THEN the client SHALL raise `ValueError`.
-5. IF the GitHub response has a non-2xx status THEN the client SHALL raise `HTTPError` and return no events.
+1. WHEN `main()` parses CLI args THEN `--source` (required) selects the YAML entry in `ingestion/config/sources.yml`, `--endpoint` (optional, default `"default"`) selects the endpoint variant, and repeated `--param KEY=VALUE` supplies the template parameters (e.g. `owner`, `repo`, `org`) needed to fill that variant's URL template. *(`ingestion/app.py`)*
+2. WHEN `get_source_config(source, endpoint, endpoint_params)` is called THEN it SHALL look up the source in `ingestion/config/sources.yml`, resolve the requested endpoint template (`config/sources.yml`'s `endpoints` map), and format it with the given params into a `SourceConfig.url`. *(`ingestion/models.py`)*
+3. IF the requested source or endpoint variant does not exist, or a required template parameter is missing THEN `get_source_config`/`_resolve_url` SHALL raise (`NotImplementedError` for an unknown source, `ValueError` for an unknown endpoint or missing params).
+4. WHEN `IngestionClient.get_events()` is called THEN it SHALL `GET` `self.source_config.url` (already fully resolved by `get_source_config`) and return the parsed JSON list. *(`ingestion/adapters/client.py`)*
+5. IF the GitHub response has a non-2xx status THEN the client SHALL raise `HTTPError` (via `response.raise_for_status()`) and return no events.
 6. IF a connection-level error occurs THEN the client SHALL propagate it rather than returning a partial or empty result silently.
-7. WHEN a fetched payload validates against `GitHubEvent` THEN `IngestionEngine.process()` SHALL produce a `RawEvent` with `source=GITHUB`, `source_event_id`, `source_event_type`, `observed_at` (ingestion-time timestamp), `schema_version=1`, and the original validated payload preserved under `payload`. *(`ingestion/engine.py:40-52`)*
-8. IF a fetched payload fails `GitHubEvent` validation THEN the engine SHALL log the failure (including the event id when present) and exclude that event from the output, without stopping processing of the remaining events in the batch.
+7. WHEN a fetched payload's `id`/`type` are resolvable via `SourceConfig.get_event_id`/`get_event_type` (the YAML-declared `id_field`/`type_field` dotted paths) THEN `IngestionEngine.process()` SHALL produce a `RawEvent` with `source=<source name>`, `source_event_id`, `source_event_endpoint=<endpoint variant>`, `source_event_type`, `observed_at` (ingestion-time timestamp), `schema_version=1`, and the original payload (validated as a generic `EventModel`) preserved under `payload`. *(`ingestion/adapters/engine.py`)*
+8. IF a fetched payload fails `EventModel` validation, or its `id`/`type` path can't be resolved (`ValidationError`, `KeyError`, `ValueError`) THEN the engine SHALL log the failure and exclude that event from the output, without stopping processing of the remaining events in the batch.
 9. WHEN the input event list is empty THEN `process()` SHALL return an empty list.
-10. WHEN `IngestionPublisher.publish()` is called with one or more `RawEvent` THEN it SHALL JSON-serialize and send each one to the configured Kafka topic, then flush the producer exactly once after all sends succeed. *(`ingestion/publisher.py:34-41`)*
-11. IF a Kafka send fails THEN the publisher SHALL NOT call flush and SHALL propagate the `KafkaError`.
-12. WHERE no explicit `bootstrap_servers` is passed to `IngestionPublisher` THEN it SHALL read `KAFKA_BOOTSTRAP_SERVERS` from the environment; IF that variable is also unset THEN it SHALL raise `KeyError`.
-13. WHEN `IngestionPipeline.execute()` runs THEN it SHALL call, strictly in order, `client.get_events()` → `engine.process()` → `producer.publish()`. *(`ingestion/use_case.py:20-26`)*
+10. WHEN `IngestionProducer.publish()` is called with one or more `RawEvent` THEN it SHALL JSON-serialize and send each one to the configured Kafka topic, then flush the producer exactly once after all sends succeed. *(`ingestion/adapters/producer.py`)*
+11. IF a Kafka send fails THEN the producer SHALL NOT call flush and SHALL propagate the `KafkaError`.
+12. WHERE no explicit `bootstrap_servers` is passed to `IngestionProducer` THEN it SHALL read `KAFKA_BOOTSTRAP_SERVERS` from the environment; IF that variable is also unset THEN it SHALL raise `KeyError`.
+13. WHEN `IngestionPipeline.execute()` runs THEN it SHALL call, strictly in order, `client.get_events()` → `engine.process()` → (dedup via `tracker`) → `producer.publish()`. *(`ingestion/use_case.py`)*
 14. IF any stage of `execute()` raises THEN the pipeline SHALL propagate the exception and SHALL NOT invoke the remaining stage(s).
 
-**Independent Test**: Run `python -m ingestion.app --source github` against a local Kafka broker and confirm messages land on the raw topic via Kafka UI; `pytest tests/ingestion` passes standalone (35 tests, no live network/Kafka needed - everything above is mocked).
+**Independent Test**: Run `python -m ingestion.app --source github` against a local Kafka broker and confirm messages land on the raw topic via Kafka UI; `make test` passes standalone (no live network/Kafka needed - everything above is mocked).
 
 ---
 
@@ -114,11 +116,11 @@ The streaming project needs a continuously running service that pulls public Git
 
 ## Edge Cases
 
-- IF `owner`/`repo`/`org` are combined invalidly THEN `IngestionClient` SHALL raise `ValueError` (covered, P1 AC4)
+- IF a source/endpoint variant is unknown, or a required template parameter (`owner`/`repo`/`org`, per the YAML endpoint template) is missing THEN `get_source_config` SHALL raise (`NotImplementedError`/`ValueError`) before any request is made (covered, P1 AC3)
 - IF GitHub returns a non-2xx response THEN the client SHALL raise `HTTPError` (covered, P1 AC5)
-- IF a GitHub payload is missing required fields or has an unknown event `type` THEN the engine SHALL drop and log it, not raise (covered, P1 AC8)
+- IF a GitHub payload is missing the field its `id_field`/`type_field` points to, or fails `EventModel` validation THEN the engine SHALL drop and log it, not raise (covered, P1 AC8)
 - IF Kafka publish fails THEN no flush happens and the error propagates (covered, P1 AC11)
-- IF `KAFKA_BOOTSTRAP_SERVERS` is unset and no explicit servers are passed THEN `IngestionPublisher` SHALL raise `KeyError` at construction (covered, P1 AC12)
+- IF `KAFKA_BOOTSTRAP_SERVERS` is unset and no explicit servers are passed THEN `IngestionProducer` SHALL raise `KeyError` at construction (covered, P1 AC12)
 - IF the unhandled-exception loop crash happens (P2 AC1) THEN today's behavior is process termination - explicitly the gap this P2 story closes
 
 ---

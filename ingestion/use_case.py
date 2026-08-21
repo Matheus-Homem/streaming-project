@@ -1,10 +1,10 @@
 from logging import getLogger
 
 from ingestion.ports import (
-    IngestionClientBase,
-    IngestionEngineBase,
-    IngestionProducerBase,
-    UniqueTrackerBase,
+    IngestionClientPort,
+    IngestionEnginePort,
+    IngestionProducerPort,
+    IngestionTrackerPort,
 )
 
 
@@ -12,10 +12,10 @@ class IngestionPipeline:
 
     def __init__(
         self,
-        client: IngestionClientBase,
-        engine: IngestionEngineBase,
-        producer: IngestionProducerBase,
-        tracker: UniqueTrackerBase,
+        client: IngestionClientPort,
+        engine: IngestionEnginePort,
+        producer: IngestionProducerPort,
+        tracker: IngestionTrackerPort,
     ):
         self.logger = getLogger(self.__class__.__name__)
         self.client = client

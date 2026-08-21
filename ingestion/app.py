@@ -1,12 +1,18 @@
 import argparse
+import os
 from logging import getLogger
 
 from dotenv import load_dotenv
 
-from ingestion.adapters import IngestionClient, IngestionEngine, IngestionProducer
+from ingestion.adapters import (
+    IngestionClient,
+    IngestionEngine,
+    IngestionProducer,
+    IngestionTracker,
+)
 from ingestion.models import SourceConfig, get_source_config
 from ingestion.use_case import IngestionPipeline
-from ingestion.utils import BoundedUniqueTracker, RateLimitError, RetryTimer
+from ingestion.utils import RateLimitError, RetryTimer
 from shared.logger import setup_logging
 
 load_dotenv()
@@ -58,36 +64,41 @@ def parse_endpoint_params(params: list[str]) -> dict[str, str]:
     return result
 
 
-def configure_ingestion_pipeline(source_config: SourceConfig) -> IngestionPipeline:
+def configure_ingestion_pipeline(
+    source_config: SourceConfig,
+    bootstrap_servers: list[str],
+) -> IngestionPipeline:
     return IngestionPipeline(
         client=IngestionClient(source_config),
         engine=IngestionEngine(source_config),
-        producer=IngestionProducer(),
-        tracker=BoundedUniqueTracker(
+        producer=IngestionProducer(bootstrap_servers),
+        tracker=IngestionTracker(
             120
         ),  # Cover 4 polls with 30 events/poll, which is the window that the API tend to resend the same event
     )
 
 
 def main():
-    logger = getLogger("Application")
-    args = build_arguments()
-    logger.info(
-        f"Starting application for source={args.source} with poll_interval={args.poll_interval}"
-    )
-    timer = RetryTimer(int(args.poll_interval))
-    source_type = args.source
+    logger = getLogger("IngestionApplication")
+    bootstrap_servers = os.environ["KAFKA_BOOTSTRAP_SERVERS"].split(",")
 
+    args = build_arguments()
+    source_type: str = args.source
+    timer = RetryTimer(int(args.poll_interval))
     source_config = get_source_config(
         source=source_type,
         endpoint=args.endpoint,
         endpoint_params=parse_endpoint_params(args.param),
     )
+
+    logger.info(
+        f"Starting application for source={source_type} with poll_interval={args.poll_interval}"
+    )
     logger.info(
         f"Using endpoint '{source_config.variant}' resolved to '{source_config.url}'"
     )
 
-    ingestion_pipeline = configure_ingestion_pipeline(source_config)
+    ingestion_pipeline = configure_ingestion_pipeline(source_config, bootstrap_servers)
 
     while True:
         try:

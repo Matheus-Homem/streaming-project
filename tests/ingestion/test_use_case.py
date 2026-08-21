@@ -1,22 +1,22 @@
 import unittest
 from unittest.mock import Mock, call
 
+from ingestion.adapters import IngestionTracker
 from ingestion.ports import (
-    IngestionClientBase,
-    IngestionEngineBase,
-    IngestionProducerBase,
+    IngestionClientPort,
+    IngestionEnginePort,
+    IngestionProducerPort,
 )
 from ingestion.use_case import IngestionPipeline
-from ingestion.utils import BoundedUniqueTracker
 
 
 class TestIngestionPipeline(unittest.TestCase):
 
     def setUp(self):
-        self.client_mock = Mock(spec=IngestionClientBase)
-        self.engine_mock = Mock(spec=IngestionEngineBase)
-        self.producer_mock = Mock(spec=IngestionProducerBase)
-        self.tracker_mock = Mock(spec=BoundedUniqueTracker)
+        self.client_mock = Mock(spec=IngestionClientPort)
+        self.engine_mock = Mock(spec=IngestionEnginePort)
+        self.producer_mock = Mock(spec=IngestionProducerPort)
+        self.tracker_mock = Mock(spec=IngestionTracker)
         self.pipeline = IngestionPipeline(
             client=self.client_mock,
             engine=self.engine_mock,
