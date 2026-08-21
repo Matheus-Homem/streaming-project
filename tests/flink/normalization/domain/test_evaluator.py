@@ -2,11 +2,12 @@ from unittest import TestCase
 
 import jmespath
 
-from flink.normalization.adapters.evaluator import (
+from flink.normalization.domain.evaluator import (
     NormalizationFunctions,
-    NormalizationJmespathEvaluator,
+    NormalizationRulesEventEvaluator,
 )
-from flink.normalization.models import FieldRule
+from flink.normalization.models import FieldRule, NormalizationContract
+from shared.models import RawEvent
 from tests.fixtures.events import GITHUB_EVENT
 
 
@@ -46,38 +47,6 @@ class TestNormalizationFunctionsIsoToMillis(TestCase):
         self.assertIsNone(result)
 
 
-class TestNormalizationJmespathEvaluatorToMillis(TestCase):
-    def setUp(self):
-        self.evaluator = NormalizationJmespathEvaluator()
-
-    def test_can_convert_explicit_utc_offset_timestamp(self):
-        result = self.evaluator.to_millis("2026-07-17T12:21:32+00:00")
-
-        self.assertEqual(result, 1784290892000)
-
-    def test_can_assume_utc_when_timestamp_carries_no_offset(self):
-        result = self.evaluator.to_millis("2026-07-17T12:21:32")
-
-        self.assertEqual(result, 1784290892000)
-
-    def test_returns_none_for_absent_timestamp(self):
-        self.assertIsNone(self.evaluator.to_millis(None))
-        self.assertIsNone(self.evaluator.to_millis(""))
-
-    def test_agrees_with_the_jmespath_function_it_exposes(self):
-        for iso_string in (
-            "2026-07-17T12:21:32Z",
-            "2026-07-17T12:21:32",
-            "2026-07-17T12:21:32.123456",
-            None,
-        ):
-            with self.subTest(iso_string=iso_string):
-                self.assertEqual(
-                    self.evaluator.to_millis(iso_string),
-                    NormalizationFunctions()._func_iso_to_millis(iso_string),
-                )
-
-
 OPTIONS = jmespath.Options(custom_functions=NormalizationFunctions())
 
 
@@ -104,11 +73,11 @@ class TestIsoToMillisThroughJmespath(TestCase):
             expr.search({"created_at": "2026-07-17T12:21:32Z"})
 
 
-class TestNormalizationJmespathEvaluator(TestCase):
+class TestNormalizationRulesEventEvaluatorCompileRule(TestCase):
 
     def setUp(self):
         self.event = GITHUB_EVENT
-        self.evaluator = NormalizationJmespathEvaluator()
+        self.evaluator = NormalizationRulesEventEvaluator()
 
     def test_can_compile_plain_from(self):
         rule = FieldRule(**{"from": "actor.id"})
@@ -117,7 +86,7 @@ class TestNormalizationJmespathEvaluator(TestCase):
 
         self.assertEqual(expr, "actor.id")
         self.assertEqual(
-            self.evaluator.evaluate(rule, self.event),
+            self.evaluator._assess_payload_with_rule(rule, self.event),
             181008794,
         )
 
@@ -127,7 +96,7 @@ class TestNormalizationJmespathEvaluator(TestCase):
         expr = self.evaluator._compile_rule(rule)
 
         self.assertEqual(expr, "payload.issue.labels[].name")
-        result = self.evaluator.evaluate(rule, self.event)
+        result = self.evaluator._assess_payload_with_rule(rule, self.event)
         self.assertIn("area/test", result)
 
     def test_can_compile_as_boolean(self):
@@ -136,7 +105,7 @@ class TestNormalizationJmespathEvaluator(TestCase):
         expr = self.evaluator._compile_rule(rule)
 
         self.assertEqual(expr, "payload.issue.pull_request != `null`")
-        self.assertTrue(self.evaluator.evaluate(rule, self.event))
+        self.assertTrue(self.evaluator._assess_payload_with_rule(rule, self.event))
 
     def test_can_compile_as_timestamp(self):
         rule = FieldRule(**{"from": "created_at", "as": "timestamp"})
@@ -145,7 +114,7 @@ class TestNormalizationJmespathEvaluator(TestCase):
 
         self.assertEqual(expr, "iso_to_millis(created_at)")
         self.assertEqual(
-            self.evaluator.evaluate(rule, self.event),
+            self.evaluator._assess_payload_with_rule(rule, self.event),
             1784290892000,
         )
 
@@ -155,7 +124,7 @@ class TestNormalizationJmespathEvaluator(TestCase):
         expr = self.evaluator._compile_rule(rule)
 
         self.assertEqual(expr, "does.not.exist")
-        self.assertIsNone(self.evaluator.evaluate(rule, self.event))
+        self.assertIsNone(self.evaluator._assess_payload_with_rule(rule, self.event))
 
     def test_can_compile_default_with_non_null_fallback(self):
         rule = FieldRule(**{"from": "org.login", "default": "unknown"})
@@ -164,7 +133,7 @@ class TestNormalizationJmespathEvaluator(TestCase):
 
         self.assertEqual(expr, 'org.login || `"unknown"`')
         self.assertEqual(
-            self.evaluator.evaluate(rule, self.event),
+            self.evaluator._assess_payload_with_rule(rule, self.event),
             "kubernetes",
         )
 
@@ -174,7 +143,7 @@ class TestNormalizationJmespathEvaluator(TestCase):
         expr = self.evaluator._compile_rule(rule)
 
         self.assertEqual(
-            self.evaluator.evaluate(rule, self.event),
+            self.evaluator._assess_payload_with_rule(rule, self.event),
             "fallback",
         )
 
@@ -185,4 +154,74 @@ class TestNormalizationJmespathEvaluator(TestCase):
         expr = self.evaluator._compile_rule(rule)
 
         self.assertEqual(expr, raw)
-        self.assertTrue(self.evaluator.evaluate(rule, self.event))
+        self.assertTrue(self.evaluator._assess_payload_with_rule(rule, self.event))
+
+
+class TestNormalizationRulesEventEvaluatorApply(TestCase):
+
+    def setUp(self):
+        self.evaluator = NormalizationRulesEventEvaluator()
+        self.contract = NormalizationContract(
+            source="widget",
+            partition_key=FieldRule(**{"from": "id"}),
+            envelope={"entity_id": FieldRule(**{"from": "actor.id"})},
+            common={"widget_type": FieldRule(**{"from": "type"})},
+            event_types={
+                "CreatedEvent": {"created_by": FieldRule(**{"from": "by"})},
+            },
+        )
+        self.event = RawEvent(
+            source="widget",
+            source_event_id="1",
+            source_event_endpoint="/widgets",
+            source_event_type="CreatedEvent",
+            observed_at="2026-01-01T00:00:00+00:00",
+            schema_version=1,
+            payload={"id": "w-1", "actor": {"id": 7}, "type": "gadget", "by": "alice"},
+        )
+
+    def test_can_populate_partition_key_from_contract_rule(self):
+        result = self.evaluator.apply(event=self.event, contract=self.contract)
+
+        self.assertEqual(result["partition_key"], "w-1")
+
+    def test_can_evaluate_envelope_and_common_rules_against_the_payload(self):
+        result = self.evaluator.apply(event=self.event, contract=self.contract)
+
+        self.assertEqual(result["entity_id"], 7)
+        self.assertEqual(result["widget_type"], "gadget")
+
+    def test_can_evaluate_event_type_specific_rules(self):
+        result = self.evaluator.apply(event=self.event, contract=self.contract)
+
+        self.assertEqual(result["created_by"], "alice")
+
+    def test_can_return_null_field_when_path_is_absent(self):
+        contract = self.contract.model_copy(deep=True)
+        contract.common["missing"] = FieldRule(**{"from": "does.not.exist"})
+
+        result = self.evaluator.apply(event=self.event, contract=contract)
+
+        self.assertIsNone(result["missing"])
+
+    def test_can_normalize_event_of_undeclared_type_without_raising(self):
+        undeclared_event = self.event.model_copy(
+            update={"source_event_type": "UnmappedEvent"}
+        )
+
+        result = self.evaluator.apply(event=undeclared_event, contract=self.contract)
+
+        self.assertEqual(result["partition_key"], "w-1")
+        self.assertEqual(result["entity_id"], 7)
+        self.assertEqual(result["widget_type"], "gadget")
+        self.assertNotIn("created_by", result)
+
+    def test_module_contains_no_github_specific_vocabulary(self):
+        import inspect
+
+        from flink.normalization.domain import evaluator as evaluator_module
+
+        source = inspect.getsource(evaluator_module)
+
+        for github_term in ("github", "repo_name", "org_login", "issue"):
+            self.assertNotIn(github_term, source.lower())
