@@ -79,6 +79,12 @@ across the schema), the format rots into an unreadable pseudo-language. Confinin
 a single, clearly-marked key - using a third-party expression syntax rather than an invented one -
 keeps both failure modes closed.
 
+**Note (`AD-009`, 2026-08-24)**: this tier discipline assumes an engine the user should not have to
+learn directly - true of JMESPath, which is genuinely obscure to a non-technical author. It does not
+hold when the engine is already a lingua franca the target user is assumed to know, which is the case
+for aggregation's SQL. There, the raw-expression tier *is* the product, not an escape hatch - see
+"Aggregation is SQL, not a contract over SQL" below.
+
 ### Verified: how much the engine already does (JMESPath 1.1.0, 2026-08-17)
 
 Probed against real captured GitHub payloads before committing to this design (the capture file is a local artifact, untracked; the events are inlined in `tests/fixtures/events.py`). Findings:
@@ -116,13 +122,14 @@ differ by an order of magnitude.
 | **Source / endpoint** | URL template + a couple of field locations | Trivial - already solved | `SourceConfig` (`ingestion/config/sources.yml`) |
 | **Normalization** | Field mapping, light per-field transforms, nested extraction | Good fit - expression language territory | Flink DataStream (nested JSON flattening is awkward in SQL) |
 | **Transformation** | Filters, derived fields, conditionals, enrichment | Medium - the tier discipline above matters most here | TBD |
-| **Aggregation** | Group-by, windows, aggregate functions | **This is SQL.** | Flink Table API / SQL |
+| **Aggregation** | Group-by, windows, aggregate functions | **This is SQL, and SQL is the contract.** | Flink Table API / SQL |
 
-### Aggregation should compile to Flink SQL, not to an invented vocabulary
+### Aggregation is SQL, not a contract over SQL
 
-An aggregation contract - "group by `repo_name`, 5-minute tumbling window, count events" - is a
-relational query. Flink ships a Table API and SQL layer built for exactly that. Inventing a YAML
-vocabulary to express windows and aggregations would be reinventing SQL, worse.
+An aggregation requirement - "group by `repo_name`, 5-minute tumbling window, count events" - is a
+relational query. Flink ships a Table API and SQL layer built for exactly that. The original framing
+here ("compile a YAML contract to Flink SQL") would have meant inventing a vocabulary for windows and
+aggregations - reinventing SQL, worse, for an audience that already knows SQL.
 
 **This inverts a decision already recorded in `flink-normalization/design.md`**, whose Tech Decisions
 table chose the DataStream API over Table API/SQL on the grounds that per-event-type field extraction
@@ -131,8 +138,21 @@ normalization meant hand-written Python methods per event type. Under a contract
 longer holds as a blanket rule.
 
 The resolution is **hybrid, decided per stage**: normalization compiles to DataStream (flattening
-deeply nested, per-type-varying JSON is genuinely poor in SQL); aggregation compiles to Table
-API/SQL. The contract covers both; the platform picks the target.
+deeply nested, per-type-varying JSON is genuinely poor in SQL); aggregation stays on Table API/SQL -
+but as `AD-009` (2026-08-24) settles, there is no YAML layer compiling *to* that SQL. The `.sql` query
+itself, as a file the platform reads and interprets (never a Python string built at runtime), is the
+declarative contract for this stage. It satisfies `AD-006` (data, not code, authored by the user) the
+same way a YAML contract would - it just skips the compiler, because the compiler's only job would
+have been hiding syntax an assumed-SQL-literate user does not need hidden.
+
+One consequence surfaced while designing `flink-aggregation`, worth recording since it would have
+shaped a YAML wrapper badly had one been built: Flink SQL's `CREATE TABLE` needs a **fixed column
+list**, but `NormalizedEvent`'s schema is open (`extra="allow"`, fields varying by `event_type`). A
+YAML-to-DDL compiler would need a union-of-all-event-types column scheme to stay generic - real
+complexity that a query touching only the envelope fields (as most aggregations do) never needs to
+pay for. Left as a per-feature decision: hand-write the `CREATE TABLE` for the columns actually
+queried, or derive it from the normalization contract, decided when a feature's query shape is known
+rather than speculatively.
 
 ---
 
@@ -177,11 +197,15 @@ would deliver a self-service surface whose changes do not take effect.
 
 ## What is deliberately deferred
 
-- Transformation and aggregation contracts - only the *direction* is set (aggregation → Flink SQL)
+- A transformation contract - direction still open (`TBD`)
 - Database-backed contract storage
 - Any UI
 - Broadcast State / hot reload
 - Non-VCS sources (weather, financial) - the reason this vision exists (`AD-004`), still unbuilt
+
+**No longer deferred, resolved by `AD-009`**: aggregation does not get a YAML contract - it was never
+going to need one once the audience was reframed as SQL-literate. The `flink-aggregation` feature is
+this stage's first (and only planned) increment: a hand-authored `.sql` query, no compiler.
 
 `.specs/RFC.md`'s Approach section is explicit: start from a basic MVP and add incrementally rather
 than designing the full target architecture up front. Designing all four contract stages before
