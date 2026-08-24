@@ -22,6 +22,18 @@ of 2026-08-18.
 > Not re-derived below since it doesn't change any behavioral decision - see `tasks.md` and
 > `.specs/STATE.md` Handoff for the current, accurate task-by-task status.
 
+> **Second-round naming/path drift (added 2026-08-19, officializing an uncommitted refactor - transcription only)**: the split above was itself replaced. Same shape again (a port + a source-agnostic interpreter + a cached contract loader), new labels:
+> | This document / the 2026-08-18 row says | Actual code (2026-08-19) |
+> | --- | --- |
+> | `NormalizationEngine` (`flink/normalization/adapters/engine.py`) | `NormalizationRulesEventEvaluator` (`flink/normalization/domain/evaluator.py`), an `EventEvaluator` (`flink/normalization/models.py`). Rule-evaluation logic only - orchestration moved out (see next row) |
+> | Orchestration half of `NormalizationEngine.normalize` | `FlinkNormalizationPipeline.execute` (`flink/normalization/use_case.py`) - builds the `NormalizedEvent`, delegates field resolution to the injected `EventEvaluator` |
+> | `NormalizationJmespathEvaluator` (`flink/normalization/adapters/evaluator.py`) | Folded into `NormalizationRulesEventEvaluator` (`flink/normalization/domain/evaluator.py`); the `iso_to_millis` custom JMESPath function now lives on `NormalizationFunctions` in the same file |
+> | `get_contract(source)` (`flink/normalization/models.py`) | Same shape, moved to `flink/normalization/domain/utils.py`, alongside a new general-purpose `to_millis` helper (envelope-level conversion, not the JMESPath-bound one) |
+> | `flink/normalization/config/sources/<source>.yml` | `flink/normalization/sources/<source>.yml` (`config/` dropped from the path) |
+> | Domain-Neutral Envelope's `actor_id`/`actor_login` | `entity_id`/`entity_name` - same values (`actor.id`/`actor.login`), envelope field names generalized (see `spec.md`'s 2026-08-19 revision note on P1 AC2) |
+> | `NormalizationEngineBase`/`NormalizationEvaluatorBase` (`flink/normalization/ports.py`) | Replaced by PyFlink-facing ports for the still-open T15-T18 work: `NormalizationFlatMapFunctionBase`, `NormalizationSinkBase`, `NormalizationSourceBase` (all `NormalizationBase`). **Not yet verified against the real PyFlink API** - `NormalizationSinkBase`'s `open/run/cancel` and `NormalizationSourceBase`'s `initialize/invoke/flush` don't match any real `SinkFunction`/`SourceFunction`/`KafkaSource`/`KafkaSink` interface; this is open work, not a settled design (`tasks.md` T15-T18) |
+> `flink/normalization/adapters/function.py` (`NormalizationFlatMapFunction`), `adapters/sink.py` (`NormalizationKafkaSink`), and `adapters/source.py` (`NormalizationKafkaSource`) exist as empty stubs implementing the ports above - not yet real logic, tracked as open work in `tasks.md` T15-T18.
+
 ---
 
 ## Architecture Overview
@@ -152,8 +164,8 @@ source: github
 partition_key: { from: repo.name }
 
 envelope:
-  actor_id:    { from: actor.id }
-  actor_login: { from: actor.login }
+  entity_id:   { from: actor.id }
+  entity_name: { from: actor.login }
   event_time:  { from: created_at, as: timestamp }
 
 common:                      # applies to every event type of this source
@@ -238,7 +250,6 @@ by the user, who only writes YAML (`AD-006`).
 
 ```python
 class FieldRule(BaseModel):
-    """One declared output field. Exactly one of `from_`/`expression` is required."""
     from_: str | None = Field(default=None, alias="from")
     take: str | None = None          # pluck this attribute from a list of objects
     as_: Literal["boolean", "timestamp"] | None = Field(default=None, alias="as")
