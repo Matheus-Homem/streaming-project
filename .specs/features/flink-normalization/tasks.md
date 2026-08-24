@@ -19,7 +19,7 @@ The agent never commits (`AD-003`, unaffected by `AD-008`) - it hands off a diff
 ---
 
 **Design**: `.specs/features/flink-normalization/design.md`
-**Status**: Draft
+**Status**: Phases 1-6 (T1-T22) all closed or explicitly not-applicable as of 2026-08-24. Two open sub-items remain, both non-blocking for merge but open for a true feature close: T19's live smoke test needs a re-run against T16's 2026-08-24 sink key fix (see T16/T19 status notes - the 2026-08-21 run predates the fix and likely only checked the JSON payload, not the physical Kafka record key), and T15's `schema_version != 1` rejection sub-case (`shared.models.RawEvent.schema_version` has no `== 1` constraint yet).
 
 ---
 
@@ -32,10 +32,10 @@ The agent never commits (`AD-003`, unaffected by `AD-008`) - it hands off a diff
 | `NormalizationEngineBase` (ABC, `ports.py`) | none | Interface only, no logic - matches the untested-ABC precedent of `ingestion/ports.py` | - | build gate only |
 | Contract models (Pydantic grammar, `models.py`) | unit | All validation branches. A contract with an unknown key, a missing `from`/`expression`, or an unsupported `as:` value MUST fail validation - this is the platform's only defence against a silently-null column (`design.md` Risks) | `tests/flink/normalization/test_models.py` | `make test` |
 | Contract compiler (`models.py`) | unit | 1:1 to every row of `design.md`'s compilation-rule table (`from`, `take`, `as: boolean`, `as: timestamp`, `default`, raw `expression`) | `tests/flink/normalization/test_models.py` | `make test` |
-| Contract loader (`models.py`) | unit | Happy path + unknown source raises + caching behaviour - mirrors `tests/ingestion/test_models.py`'s coverage of `get_source_config` | `tests/flink/normalization/test_models.py` | `make test` |
-| Custom JMESPath functions (`functions.py`) | unit | All branches incl. malformed/absent input - it is the one piece of real computation in the contract path | `tests/flink/normalization/adapters/test_evaluator.py` | `make test` |
-| `NormalizationEngine` (domain logic, `adapters/engine.py`) | unit | All branches; 1:1 to `spec.md`'s P1 Normalization ACs - envelope shape, common block, per-type block, unmapped-type fallback (AC5), absent optional field → null | `tests/flink/normalization/adapters/test_engine.py` | `make test` |
-| Normalization contracts (`config/*.yml`) | unit | The contract is data, but its *effect* is behaviour: each declared event type must produce exactly its `spec.md` Normalization Mapping row when run against a real fixture. Verified through `NormalizationEngine`, not by asserting on the YAML | `tests/flink/normalization/test_contracts_github.py` | `make test` |
+| Contract loader (`get_contract`, relocated 2026-08-19 to `domain/utils.py`) | unit | Happy path + unknown source raises + caching behaviour - mirrors `tests/ingestion/test_models.py`'s coverage of `get_source_config` | `tests/flink/normalization/domain/test_utils.py` | `make test` |
+| Custom JMESPath functions (`NormalizationFunctions`, relocated 2026-08-19 to `domain/evaluator.py`) | unit | All branches incl. malformed/absent input - it is the one piece of real computation in the contract path | `tests/flink/normalization/domain/test_evaluator.py` | `make test` |
+| Rule evaluation + contract orchestration (relocated 2026-08-19: `NormalizationEngine`+`NormalizationJmespathEvaluator` → `NormalizationRulesEventEvaluator` in `domain/evaluator.py`, envelope-building → `FlinkNormalizationPipeline` in `use_case.py`) | unit | All branches; 1:1 to `spec.md`'s P1 Normalization ACs - envelope shape, common block, per-type block, unmapped-type fallback (AC5), absent optional field → null | `tests/flink/normalization/domain/test_evaluator.py`, `tests/flink/normalization/test_use_case.py` | `make test` |
+| Normalization contracts (`sources/*.yml`, relocated 2026-08-19 - path dropped `config/`) | unit | The contract is data, but its *effect* is behaviour: each declared event type must produce exactly its `spec.md` Normalization Mapping row when run against a real fixture. Verified through `FlinkNormalizationPipeline` (`use_case.py`), not by asserting on the YAML | `tests/flink/normalization/test_contracts_github.py` | `make test` |
 | `NormalizationFunction` (Flink `FlatMapFunction`, `job.py`) | unit | All branches: valid message → yields normalized record; malformed JSON / bad `schema_version` / unregistered source → yields nothing + logs. Called directly as a plain Python method - no live cluster needed | `tests/flink/normalization/test_job.py` | `make test` |
 | Job wiring (`app.py`) | unit | Config/env wiring covered with mocks (mirrors `tests/ingestion/test_app.py`'s `build_arguments`/`configure_*` pattern) - `StreamExecutionEnvironment.execute()` itself is not exercised in unit tests | `tests/flink/normalization/test_app.py` | `make test` |
 | Docker/compose/shell infra (`Dockerfile`s, `docker-compose.yml`, `create-topics.sh`) | none | No unit tests apply; verified via each story's `spec.md` Independent Test | - | manual (spec Independent Test) + `docker compose -f infra/docker/docker-compose.yml config` for YAML/interpolation validity |
@@ -334,12 +334,14 @@ Tasks: T20, T21, T22
 **Gate**: quick - closes Phase 3
 **Status**: Re-opened 2026-08-18 (`/mentor-next` dry run) - the AC5 fallback fix stands, but the Domain-Neutral Envelope field-naming gap above still needs a fix + test before Phase 3 can close for real.
 
+**Relocation note (2026-08-19, officializing an uncommitted refactor - transcription only)**: `NormalizationEngine` (`flink/normalization/adapters/engine.py`) was split again - rule evaluation is now `NormalizationRulesEventEvaluator` (`flink/normalization/domain/evaluator.py`), orchestration (building the `NormalizedEvent`) is now `FlinkNormalizationPipeline` (`flink/normalization/use_case.py`). Tests moved accordingly (`tests/flink/normalization/domain/test_evaluator.py`, `tests/flink/normalization/test_use_case.py`). This task's done-when items still hold against the new location - see `design.md`'s second naming-drift table.
+
 ---
 
 ### T12: GitHub contract - shared blocks
 
 **What**: `flink/normalization/config/sources/github.yml` with its `source`, `partition_key`, `envelope`, and `common` blocks per `spec.md`'s Domain-Neutral Envelope and GitHub-specific fields block tables. No `event_types` entries yet (T13, T14).
-**Where**: `flink/normalization/config/sources/github.yml` (not `flink/normalization/config/sources/github.yml` - see `design.md`'s naming-drift note)
+**Where**: `flink/normalization/sources/github.yml` (path dropped `config/` - relocated 2026-08-19, see `design.md`'s naming-drift note)
 **Depends on**: T11
 **Reuses**: `spec.md`'s Normalization Mapping tables are the authoritative field list - this task transcribes them, it does not re-derive them
 **Requirement**: FLK-07, FLK-08
@@ -350,7 +352,7 @@ Tasks: T20, T21, T22
 
 **Done when**:
 - [x] `partition_key` resolves to `repo.name` (spec P1 AC3) - live-verified 2026-08-18
-- [x] `envelope` covers `actor_id`, `actor_login`, `event_time` (with `as: timestamp`) - live-verified 2026-08-18, `event_time` correctly epoch-millis via `iso_to_millis`
+- [x] `envelope` covers `entity_id`, `entity_name`, `event_time` (with `as: timestamp`) - live-verified 2026-08-18 as `actor_id`/`actor_login`, renamed 2026-08-19 to `entity_id`/`entity_name` (same values), `event_time` correctly epoch-millis via `iso_to_millis`
 - [x] `common` covers `repo_id`, `repo_name`, `org_id`, `org_login`, `public` - re-verified 2026-08-18 by `/mentor-next`: the contract now emits `public` (`from: "public"`), matching `spec.md` exactly; the earlier `is_public` naming gap noted below has since been fixed in the code
 - [x] `org_id`/`org_login` come back null for an event whose payload has no `org`, verified against a real fixture (spec.md Edge Cases) - live-verified 2026-08-18
 - [x] Unit tests run a real event through `NormalizationEngine` and assert the envelope + common output, field by field - **closed 2026-08-19** (agent-authored, task level `deliver`): `tests/flink/normalization/test_contracts_github.py`, 17 tests + 4 subtests, driven through `NormalizationEngine` against real captured events (`SAMPLE_SHAPED_GITHUB_EVENTS` in `tests/fixtures/events.py`). Envelope identity, actor, both epoch-millis conversions, repo/org block, `public` as a real bool, null org fields on an org-less event, and absence of the raw-only fields are each asserted (`tests/flink/normalization/test_contracts_github.py`); `tests/fixtures/events.py`'s `GITHUB_EVENT` (a real captured `IssueCommentEvent`) is the fixture it is built against
@@ -364,7 +366,7 @@ Tasks: T20, T21, T22
 ### T13: GitHub contract - the 4 sample-verified event types
 
 **What**: `event_types` entries for `IssueCommentEvent`, `PullRequestEvent`, `PullRequestReviewEvent`, and `PullRequestReviewCommentEvent` - the four whose field mapping was verified against real traffic.
-**Where**: `flink/normalization/config/sources/github.yml`
+**Where**: `flink/normalization/sources/github.yml` (path dropped `config/` - relocated 2026-08-19)
 **Depends on**: T12
 **Reuses**: `tests/fixtures/events.py`'s `SAMPLE_SHAPED_GITHUB_EVENTS` holds a real captured instance of each of these four; `spec.md`'s per-type curated-field rows are the binding spec
 **Requirement**: FLK-06
@@ -387,7 +389,7 @@ Tasks: T20, T21, T22
 ### T14: GitHub contract - the 7 doc-resolved event types
 
 **What**: `event_types` entries for `WatchEvent`, `CreateEvent`, `DeleteEvent`, `PublicEvent`, `GollumEvent`, `IssuesEvent`, and `MemberEvent` - mapped from the GitHub Events API docs and cross-checked against sample-verified nested shapes.
-**Where**: `flink/normalization/config/sources/github.yml`
+**Where**: `flink/normalization/sources/github.yml` (path dropped `config/` - relocated 2026-08-19)
 **Depends on**: T13
 **Reuses**: `spec.md`'s per-type rows; the `issue`/`user`/`label` nested shapes already verified by T13's fixtures
 **Requirement**: FLK-06
@@ -408,23 +410,29 @@ Tasks: T20, T21, T22
 
 ---
 
-### T15: `NormalizationFunction` (Flink `FlatMapFunction`)
+### T15: `NormalizationFlatMapFunction` (Flink `FlatMapFunction`)
 
-**What**: `NormalizationFunction(FlatMapFunction)` with `flat_map(self, value: str) -> Iterator[str]`: parses/validates `value` as a `RawEvent` (log + yield nothing on bad JSON, missing field, or `schema_version != 1`), delegates to `NormalizationEngine` (log + yield nothing when no contract exists for that source), `json.dumps` the result, yields it. Adds `apache-flink` to `requirements/flink.txt`.
-**Where**: `flink/normalization/job.py`
+**What**: `NormalizationFlatMapFunction(NormalizationFlatMapFunctionBase)` with `flat_map(self, value: str) -> Iterator[str]`: parses/validates `value` as a `RawEvent` (log + yield nothing on bad JSON, missing field, or `schema_version != 1`), delegates to `use_case.FlinkNormalizationPipeline` (log + yield nothing when no contract exists for that source), `json.dumps` the result, yields it. Adds `apache-flink` to `requirements/flink.txt`.
+**Where**: `flink/normalization/adapters/function.py` (relocated 2026-08-19 - originally planned as a single `job.py`; `NormalizationFlatMapFunctionBase` port lives in `flink/normalization/ports.py`)
 **Depends on**: T11
-**Reuses**: `RawEvent.model_validate_json`; the log-and-skip pattern from `ingestion/adapters/engine.py`'s `_format_events`
+**Reuses**: `RawEvent.model_validate_json`; the log-and-skip pattern from `ingestion/adapters/engine.py`'s `_format_events`; `use_case.FlinkNormalizationPipeline` (T11's relocation)
 **Requirement**: FLK-11
+
+**Status note (updated 2026-08-21 by `/mentor-tasks` sync, second pass - supersedes both notes below)**: since the first 2026-08-21 sync (same day), `flat_map` was rewritten again and is now fully sound - it catches `ValidationError` (malformed JSON/missing field) and `NotImplementedError` (unmapped source) separately, both via `self.logger.warning` (the earlier `print()`-based version is gone), plus a generic `except Exception: self.logger.exception(...)`. A dedicated test file now exists (`tests/flink/normalization/adapters/test_function.py`, 6 tests, written this session per `AD-002`'s explicit-request/already-functional-code exception) and the exact chain was proven live in a real Flink job during T19's smoke test, not just mocked. The one remaining real gap: `schema_version != 1` is still not rejected (see below).
+
+**Status note (2026-08-21, first pass, stale)**: `flat_map` has a real body now (`flink/normalization/adapters/function.py`), not a stub - parses JSON, builds `RawEvent`, delegates to `FlinkNormalizationPipeline`, yields the serialized result. But it is untested (no `tests/flink/normalization/adapters/test_function.py` exists) and a read-only source check found three of the five behavioral criteria below still unmet - see per-item notes.
+
+**Status note (2026-08-19, stale)**: `flat_map` currently exists only as an empty stub (docstring, no body) - none of the done-when items below are met yet. This is `paired`-level work (`map.md`, K-03) - the flat_map-over-map decision needs to be made/defended before the mechanical parse/delegate/yield body is written.
 
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `apache-flink` added to `requirements/flink.txt` (`design.md` flags as unverified whether this needs a JVM at plain-import time - budget time to confirm during this task)
-- [ ] A valid `RawEvent` JSON yields exactly one normalized JSON string
-- [ ] Malformed JSON, a missing envelope field, and `schema_version != 1` each yield nothing and log (FLK-11, spec P1 AC6)
-- [ ] A `RawEvent` whose `source` has no contract yields nothing and logs a warning (`design.md`'s closed gap)
-- [ ] `flat_map` is callable directly as a plain Python method in tests - no live cluster
-- [ ] Gate check passes: `make test`
+- [x] `apache-flink` added to `requirements/flink.txt` (`design.md` flags as unverified whether this needs a JVM at plain-import time - budget time to confirm during this task) - verified 2026-08-21: `apache-flink==2.3.0` pinned in `requirements/flink.txt`
+- [x] A valid `RawEvent` JSON yields exactly one normalized JSON string - verified 2026-08-21 two ways: `test_can_yield_the_normalized_event_as_json` (mocked) and live, via T19's smoke test (a hand-produced `RawEvent` on `events-raw` came back correctly normalized on `events-normalized` through the real running Flink job)
+- [~] Malformed JSON, a missing envelope field, and `schema_version != 1` each yield nothing and log (FLK-11, spec P1 AC6) - **partially fixed 2026-08-21**: malformed JSON and a missing field are both now handled and logged via `self.logger.warning` (verified by `test_can_discard_malformed_json_without_calling_the_normalizer`/`test_can_discard_a_raw_event_missing_a_required_field`). `schema_version != 1` is still **not** rejected - `shared.models.RawEvent.schema_version` (`shared/models.py:12`) remains a bare `int` with no `== 1` constraint, so a message with `schema_version: 2` still passes validation and gets normalized instead of skipped. This one sub-case stays open
+- [x] A `RawEvent` whose `source` has no contract yields nothing and logs a warning (`design.md`'s closed gap) - **fixed 2026-08-21**: `flat_map` now has a dedicated `except NotImplementedError` branch around `self._normalizer.normalize(...)`, logging a warning and returning nothing - verified by `test_can_discard_an_event_from_an_unknown_source`
+- [x] `flat_map` is callable directly as a plain Python method in tests - no live cluster - true by construction, still applies
+- [x] Gate check passes: `make test` - `tests/flink/normalization/adapters/test_function.py` (6 tests) now exists and passes; full `tests/flink/` tree: 87 passed, 11 subtests, no collection errors
 
 **Tests**: unit
 **Gate**: full - closes Phase 4
@@ -433,20 +441,28 @@ Tasks: T20, T21, T22
 
 ### T16: Job wiring (`app.py`)
 
-**What**: Builds the `StreamExecutionEnvironment`, wires `KafkaSource(events-raw, consumer group flink-normalization) → NormalizationFunction → KafkaSink(events-normalized, keyed by partition_key)`, calls `env.execute()`. Entrypoint for Application Mode (`standalone-job -py app.py`).
-**Where**: `flink/normalization/app.py`
+**What**: Builds the `StreamExecutionEnvironment`, wires `KafkaSource(events-raw, consumer group flink-normalization) → NormalizationFlatMapFunction → KafkaSink(events-normalized, keyed by partition_key)`, calls `env.execute()`. Entrypoint for Application Mode (`standalone-job -py app.py`).
+**Where**: `flink/normalization/app.py`; source/sink adapters in `flink/normalization/adapters/source.py` (`NormalizationKafkaSource`) and `adapters/sink.py` (`NormalizationKafkaSink`), implementing `NormalizationSourceBase`/`NormalizationSinkBase` (`flink/normalization/ports.py`)
 **Depends on**: T15
 **Reuses**: `.env`/`load_dotenv()` + `KAFKA_BOOTSTRAP_SERVERS` convention from `ingestion/app.py`
 **Requirement**: FLK-06, FLK-08
 
+**Status note (2026-08-24, sink key fix - closes this task's one remaining gap)**: the critical open item below (key extractor unwired) is fixed on branch `fix/flink-normalization-kafka-sink-key`. `flink/common/adapters/sink.py` gained `JsonFieldSerializationSchema(SerializationSchema)` - a generic (not `NormalizedEvent`-aware, deliberately kept out of `flink/common`'s domain-neutral layer) JSON-field extractor: `serialize(self, element)` parses `element`, looks up `self._key_field`, returns `.encode()`d bytes. The field name is injected, not hardcoded - `KafkaSinkParams` (`flink/common/models.py`) gained a `key_field: str`, `KafkaSinkAdapter.build()` passes `self._params.key_field` into the constructor, and `flink/normalization/app.py` sets `key_field="partition_key"` when building its `KafkaSinkParams` - the only place that needs to know the domain field name. `own`-level task (user-authored, agent-reviewed across several rounds - first pass called `.serialize()` immediately instead of passing the instance, an early sketch put `key_field` on `NormalizedEvent` import inside `flink/common` before the layering issue was caught). Tests added under `AD-002` (agent-authored, explicit request, already-functional code): `tests/flink/common/adapters/test_sink.py` gained `test_can_wire_the_key_serializer_with_the_configured_key_field` (asserts `set_key_serialization_schema` receives a `JsonFieldSerializationSchema` built from `self.params.key_field`) and `TestJsonFieldSerializationSchemaSerialize` (extract+encode happy path, `KeyError` on a missing field - documented as current behavior, not yet aligned with `flat_map`'s log-and-skip pattern). `make test` (`tests/flink`): 94 passed, 11 subtests, no regression. **Not yet done**: a live re-run of T19's smoke test against this fix - see T19's status note below, the 2026-08-21 "correctly-keyed" verification predates this fix and almost certainly only checked the JSON payload's `partition_key` field, not the physical Kafka record key.
+
+**Status note (updated 2026-08-21 by `/mentor-tasks` sync, second pass)**: `app.py` was rewritten again since the first 2026-08-21 note below - the crash it flagged is gone. It now builds a `YamlContractRepository` + `EventNormalizer` once at startup and passes them into `NormalizationFlatMapFunction(normalizer=normalizer)` correctly. Source/sink construction moved off the old `adapters/source.py`/`adapters/sink.py` stubs entirely - those files (and the `NormalizationSourceBase`/`NormalizationSinkBase` ports this task originally named) are gone; `app.py` now calls `KafkaFactory.create_source(...)`/`create_sink(...)` from the new `flink/common/` package instead (`KafkaSourceAdapter`/`KafkaSinkAdapter` behind `EventSourcePort`/`EventSinkPort`, tested this session in `tests/flink/common/`). T19's live smoke test proved this wiring actually runs: the job registered, discovered `events-raw`'s partitions, and produced correct output on `events-normalized`.
+
+**Status note (2026-08-21, first pass, stale)**: `app.py` now really wires `StreamExecutionEnvironment` → `KafkaSource` → `flat_map` → `KafkaSink`, guarded behind `if __name__ == "__main__":` - it's no longer the manual `event_sample.json` harness. `adapters/source.py`/`adapters/sink.py` (`NormalizationKafkaSource`/`NormalizationKafkaSink`) are still empty stubs and are not actually used by `app.py` - the wiring builds `KafkaSource`/`KafkaSink` directly with the PyFlink builders instead. A crash-level gap was found on read: `app.py:63` instantiates `NormalizationFlatMapFunction()` with no arguments, but `function.py`'s `__init__` requires `event_evaluator` - this would raise `TypeError` the moment `app.py` actually runs.
+
+**Status note (2026-08-19, stale)**: `adapters/source.py`/`adapters/sink.py` currently exist only as empty stubs, and `app.py` today is a manual harness (reads local `event_sample.json`, prints results) rather than real `StreamExecutionEnvironment` wiring. Neither the port method shapes (`NormalizationSourceBase.initialize/invoke/flush`, `NormalizationSinkBase.open/run/cancel`) have been verified against the real PyFlink `SourceFunction`/`SinkFunction`/`KafkaSource`/`KafkaSink` API - this needs research before the mechanical body is written. `paired`-level (`map.md`, K-04 Application vs Session Mode; K-08 pip vs JAR belongs to T17).
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Config/wiring functions (building source/sink configs from env vars) are unit-tested with mocks, mirroring `tests/ingestion/test_app.py`'s style
-- [ ] `KafkaSink`'s key extractor is wired to `partition_key`
-- [ ] Job does not call `env.execute()` at import time (importable/testable without starting a real pipeline)
-- [ ] Contracts are loaded once at startup, not per record (`design.md` Tech Decisions)
-- [ ] Gate check passes: `make test`
+- [x] Config/wiring functions (building source/sink configs from env vars) are unit-tested with mocks, mirroring `tests/ingestion/test_app.py`'s style - **closed 2026-08-21** (agent-authored under `AD-002`, explicit request, already-functional code): `tests/flink/normalization/test_app.py` (4 tests) now exists, exercising `app.py`'s `if __name__` block directly via `runpy.run_module(..., run_name="__main__")` with every external dependency mocked - covers the missing-env-var `KeyError`, source/sink param construction, normalizer/contract-repository wiring, and the full `from_source → flat_map → sink_to → execute` chain. `flink/normalization/app.py`: 0% → 100% coverage
+- [x] `KafkaSink`'s key extractor is wired to `partition_key` - **fixed 2026-08-24** (see status note above): `KafkaSinkAdapter.build()` now calls `set_key_serialization_schema(JsonFieldSerializationSchema(self._params.key_field))`, `app.py` sets `key_field="partition_key"`. Proven by `test_can_wire_the_key_serializer_with_the_configured_key_field` + `TestJsonFieldSerializationSchemaSerialize` (unit-level, mocked/direct). **Still open**: a live `docker compose` run re-confirming the physical Kafka record key (not just the JSON payload's `partition_key` field) is set on a real message - T19's 2026-08-21 checkbox predates this fix and doesn't cover it, see T19's note below
+- [x] Job does not call `env.execute()` at import time (importable/testable without starting a real pipeline) - the whole wiring block is under `if __name__ == "__main__":`
+- [x] Contracts are loaded once at startup, not per record (`design.md` Tech Decisions) - re-verified 2026-08-21 against the current code: `app.py` builds one `YamlContractRepository` instance at startup and threads it through `EventNormalizer` into the single long-lived `NormalizationFlatMapFunction` - its instance-dict cache (`adapters/contract_repository.py`) is populated once per source on first use and reused for every subsequent record, not reloaded per record
+- [x] Gate check passes: `make test` - closed alongside the first item above: `tests/flink/normalization/test_app.py` passes, full suite 185 passed, 99% coverage, no regression
 
 **Tests**: unit
 **Gate**: full
@@ -456,19 +472,23 @@ Tasks: T20, T21, T22
 ### T17: Flink Dockerfile
 
 **What**: `FROM flink:2.3.0-scala_2.12-java17`; installs Python 3.12 + `pip install -r requirements/flink.txt` (which carries `jmespath` and, from T15, `apache-flink` - and via `base.txt`, `pydantic`/`PyYAML`; deliberately not `kafka-python`/`requests`, which are ingestion-only); adds the Flink Kafka connector JAR to `/opt/flink/lib`; copies `flink/normalization/` (including `config/*.yml`) and `shared/models.py` into the image's usrlib path.
-**Where**: `infra/docker/flink/Dockerfile`
+**Where**: `infra/docker/flink/Dockerfile` (an untracked `flink/normalization/Dockerfile` exists as of 2026-08-19 but does not satisfy this task - see status note)
 **Depends on**: T16
 **Reuses**: Verified Docker Hub tag (`flink:2.3.0-scala_2.12-java17`) from `design.md` research; `ingestion/Dockerfile`'s shape
 **Requirement**: FLK-04
 
+**Status note (updated 2026-08-21 by `/mentor-tasks` sync - supersedes the 2026-08-19 note below, which is now stale)**: `flink/normalization/Dockerfile` was rewritten since - it is now `FROM flink:2.3.0-scala_2.12-java17`, installs Python 3 via `apt-get`, downloads `flink-sql-connector-kafka-5.0.0-2.2.jar` straight into `/opt/flink/lib`, copies `flink/common/`+`flink/normalization/`+`shared/` (not `ingestion/`), and its `CMD` runs `standalone-job -py .../app.py`. All 5 done-when items below verified live during T19's smoke test.
+
+**Status note (2026-08-19, stale)**: the current `flink/normalization/Dockerfile` is `FROM python:3.12-slim` and only `pip install`s `requirements/flink.txt`, then runs `python -m flink.normalization.app` - no JVM, no Flink binaries, no Kafka connector JAR. It does not build a real Flink cluster image; none of the done-when items below are met.
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Image builds successfully
-- [ ] `python3 -c "import pyflink, jmespath"` succeeds inside the built image
-- [ ] The Kafka connector JAR is present under `/opt/flink/lib`
-- [ ] `flink/normalization/config/sources/*.yml` is present in the image - the job cannot start without its contracts (`design.md` Risks)
-- [ ] The image does NOT copy `ingestion/` - the contract design removed that cross-package dependency
+- [x] Image builds successfully - verified 2026-08-21: `docker compose up -d --build` built `docker-normalization` cleanly
+- [x] `python3 -c "import pyflink, jmespath"` succeeds inside the built image - verified 2026-08-21: `docker exec normalization python3 -c "import pyflink, jmespath; print('OK')"` → `OK`
+- [x] The Kafka connector JAR is present under `/opt/flink/lib` - confirmed via Dockerfile (`curl -fL -o /opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar ...`) and live: the job actually connected to Kafka and consumed/produced through it
+- [x] `flink/normalization/sources/*.yml` is present in the image - the job cannot start without its contracts (`design.md` Risks) - confirmed live: the running job correctly normalized a `WatchEvent` per `github.yml`'s contract, which only works if the YAML shipped in the image
+- [x] The image does NOT copy `ingestion/` - the contract design removed that cross-package dependency - confirmed by reading the Dockerfile: only `flink/common/`, `flink/normalization/`, `shared/` are copied
 
 **Tests**: none
 **Gate**: build
@@ -483,14 +503,18 @@ Tasks: T20, T21, T22
 **Reuses**: The `depends_on`/`environment` conventions now established by the `ingestion` service, including the single-broker `KAFKA_BOOTSTRAP_SERVERS: broker-1:19092` form
 **Requirement**: FLK-04, FLK-05
 
+**Status note (updated 2026-08-21 by `/mentor-tasks` sync - supersedes the 2026-08-19 note below, which is now stale)**: `infra/docker/docker-compose.yml` was rewritten since - the `template` placeholders are gone. The JobManager role is now the `normalization` service itself (`command` defaults to the Dockerfile's `standalone-job -py .../app.py` CMD, `FLINK_PROPERTIES` sets `jobmanager.rpc.address: normalization`), and a separate `taskmanager` service (`command: taskmanager`) points back at it. Both `depends_on: topic-init: condition: service_completed_successfully`. All 5 done-when items below verified live during T19's smoke test.
+
+**Status note (2026-08-19, stale)**: `infra/docker/docker-compose.yml` currently has `flink-jobmanager`/`flink-taskmanager` entries whose body is the literal placeholder text `template` - not valid YAML service definitions (`docker compose config` fails on this file today). None of the done-when items below are met.
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] WHEN `docker compose up` runs THEN JobManager + TaskManager start and the Flink Web UI is reachable from the host
-- [ ] The job shows as running in the Flink Web UI without a manual submission step
-- [ ] Topic provisioning completes before the Flink services start (spec P1 Infra AC5)
-- [ ] `docker compose -f infra/docker/docker-compose.yml config` parses cleanly
-- [ ] Flagged risk from `design.md` (exact Application Mode CLI flags for a Python entrypoint): budget for iteration here if the job doesn't submit on the first attempt
+- [x] WHEN `docker compose up` runs THEN JobManager + TaskManager start and the Flink Web UI is reachable from the host - verified 2026-08-21: `normalization`/`flink-taskmanager` both `Up`, `curl localhost:8081/jobs` reachable from the host
+- [x] The job shows as running in the Flink Web UI without a manual submission step - verified 2026-08-21 via REST: `state: RUNNING`, job auto-submitted by the container's own `standalone-job` CMD, no manual step
+- [x] Topic provisioning completes before the Flink services start (spec P1 Infra AC5) - confirmed in the `docker compose up` log: `topic-init Exited` appears before `normalization Starting`, matching the `condition: service_completed_successfully` dependency
+- [x] `docker compose -f infra/docker/docker-compose.yml config` parses cleanly - verified 2026-08-21: exit 0, no errors
+- [x] Flagged risk from `design.md` (exact Application Mode CLI flags for a Python entrypoint): budget for iteration here if the job doesn't submit on the first attempt - resolved: `standalone-job -py /opt/flink/usrlib/flink/normalization/app.py` submitted and reached `RUNNING` on the first attempt, no iteration needed
 
 **Tests**: none
 **Gate**: build
@@ -505,14 +529,18 @@ Tasks: T20, T21, T22
 **Reuses**: Kafka UI (topic inspection), Flink Web UI (job status)
 **Requirement**: FLK-01, FLK-02, FLK-03, FLK-04, FLK-05, FLK-06, FLK-07, FLK-08, FLK-09, FLK-10, FLK-11, FLK-12
 
+**Status note (2026-08-24, re-open flag - not yet acted on)**: T16's sink key bug (see T16's 2026-08-24 status note) means the "keyed by `repo_name`" claim in the third `Done when` item below was verified on 2026-08-21 against a sink that had **no key serializer wired at all**. That run almost certainly only confirmed the JSON payload's `partition_key` field, not the physical Kafka record key - Kafka UI shows a message's key separately from its value, and nothing in that day's notes mentions checking it. The checkbox is left `[x]` here (not unchecked) because the *shape* half of that claim - envelope/common/`partition_key` field all correct - is still genuinely proven. What's unproven is the keying half. This needs a fresh `docker compose up` run against the fixed sink, inspecting the actual Kafka record key in Kafka UI (not the payload), before FLK-08's Independent Test can be called closed. Not done in this pass - no Docker available in this environment.
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Both topics show the configured partitions/replication/retention in Kafka UI
-- [ ] Ingestion container publishes without manual invocation
-- [ ] Flink Web UI shows the job running
-- [ ] `events-normalized` messages inspected via Kafka UI match the Normalization Mapping shape for at least one real event of a mapped type, and are keyed by `repo_name`
-- [ ] At least one event of a not-yet-mapped type appears with envelope + common populated and an empty per-type block, confirming it was not dropped (spec P1 AC5 in production, not just unit tests)
+- [x] Both topics show the configured partitions/replication/retention in Kafka UI - verified 2026-08-21: `docker compose up -d --build` from `infra/docker/`, `topic-init` exited 0, `kafka-get-offsets.sh` against `broker-1:19092` shows 3 partitions each for `events-raw`/`events-normalized` (replication/retention were already verified live in T1/T2)
+- [~] Ingestion container publishes without manual invocation - **partially verified 2026-08-21**: the `ingestion` container does start and poll on its own (confirmed in its logs), but it hit GitHub's public-API rate limit on its very first call (reset ~18:40 UTC that day, likely the sandbox's IP already near its unauthenticated quota) and produced zero organic messages during this smoke test. Mechanically unattended, but not proven with real traffic end to end - known P2 gap (`streaming-ingestion/spec.md`'s rate-limit handling), not a regression from this feature. Substituted with 2 hand-produced `RawEvent` JSON messages via `kafka-console-producer` (see items below) to still validate the rest of the chain without waiting out the rate limit
+- [x] Flink Web UI shows the job running - verified 2026-08-21 via REST (`curl localhost:8081/jobs/overview`): `normalization-job`, `state: RUNNING`, 1/1 tasks running, 0 failed; logs confirm the `KafkaSourceEnumerator` discovered `events-raw`'s 3 partitions and the `normalization-consumer-group` consumer was assigned to them
+- [x] `events-normalized` messages inspected via Kafka UI match the Normalization Mapping shape for at least one real event of a mapped type, and are keyed by `repo_name` - verified 2026-08-21: a hand-produced `WatchEvent` `RawEvent` on `events-raw` came back on `events-normalized` with the full envelope+common+`action` field, `partition_key` = `"octo/repo"` (the event's `repo.name`) - matches `spec.md`'s Normalization Mapping exactly, consumed via `kafka-console-consumer`. **Caveat added 2026-08-24** (see status note above): this predates the sink key fix, so "keyed by `repo_name`" here almost certainly means the payload field, not the physical Kafka record key - needs a live re-check
+- [x] At least one event of a not-yet-mapped type appears with envelope + common populated and an empty per-type block, confirming it was not dropped (spec P1 AC5 in production, not just unit tests) - verified 2026-08-21: a hand-produced `PushEvent` (undeclared in `github.yml`) came back with envelope+common populated (`org_id`/`org_login` correctly null - the synthetic payload had no `org`), no per-type fields - confirms AC5's fallback live, not just in `test_contracts_github.py`
+
+**Note (2026-08-21)**: the two `events-raw` messages behind the last two checks above were hand-produced JSON, not real GitHub traffic (`ingestion` never got a live message out during this run - see the rate-limit item above). They exercise the exact same code path a real GitHub event would (same `RawEvent` envelope, same contract), so the normalization behavior itself is genuinely proven; only the "captured from live GitHub traffic" literal wording of this task's `What` isn't satisfied yet. Worth a follow-up run after the rate-limit window clears, but not blocking - the pipeline mechanics are confirmed working.
 
 **Tests**: none
 **Gate**: build (manual, per `spec.md`'s P1 Independent Tests) - closes Phase 5
@@ -527,15 +555,18 @@ Tasks: T20, T21, T22
 **Reuses**: The same capture method behind the original local capture
 **Requirement**: FLK-13
 
+**Status note (2026-08-24, closed - capture aborted, all 6 deferred by explicit user decision)**: `tmp/capture_extended_events.py` (throwaway script, untracked) polled the public GitHub Events API for ~18 minutes. Stopped deliberately before any of the 6 types were captured - continued polling wasn't worth the cost against how rare some of these types are on the public feed. Rather than fall back to documentation (the exact failure mode P2 exists to avoid), the user chose to extend AC4's `SponsorshipEvent`-only escape valve to all 6 types. See `spec.md`'s P2 closing note for the full record.
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Sample file contains at least one real instance of each of the 5 reliably-occurring types
-- [ ] `SponsorshipEvent` is either captured or explicitly documented as not observed within the window (spec P2 AC4's escape valve)
-- [ ] The observation window and method are noted, so the result is reproducible
+- [ ] Sample file contains at least one real instance of each of the 5 reliably-occurring types - **not met, accepted**: capture aborted at zero results, no retry planned
+- [x] `SponsorshipEvent` is either captured or explicitly documented as not observed within the window (spec P2 AC4's escape valve) - documented as not observed; escape valve extended to all 6 types (see status note)
+- [x] The observation window and method are noted, so the result is reproducible - `tmp/capture_extended_events.py`'s own output records `started_at`/`finished_at`/method; this task's status note above carries the same record since the script never reached its own write step
 
 **Tests**: none
 **Gate**: build (manual)
+**Status**: Closed 2026-08-24 - capture accepted as unsuccessful, not fixed/retried (see status note); not a false-done checkbox.
 
 ---
 
@@ -547,17 +578,20 @@ Tasks: T20, T21, T22
 **Reuses**: The noise-filtering convention already fixed for the 11 mapped types (drop `avatar_url`, `gravatar_id`, redundant `*_url`)
 **Requirement**: FLK-14, FLK-15
 
+**Status note (2026-08-24, closed - not applicable)**: T20 captured no real sample for any of these three, and the user explicitly declined to map from documentation instead (the same unreliable-doc problem P2 exists to avoid). No `event_types` entries added; all three stay on the P1 AC5 fallback path.
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Each type's mapping is derived from the captured sample, not from documentation (the whole reason these six were deferred - `context.md`)
-- [ ] `spec.md`'s Normalization Mapping table gains a row per type, and the "Not yet mapped" list shrinks accordingly
-- [ ] Each type stops falling into the empty-fallback path and produces populated per-type fields (spec P2 AC3)
-- [ ] Unit tests use the captured real fixtures, driven through `NormalizationEngine`
-- [ ] Gate check passes: `make test`
+- [x] Each type's mapping is derived from the captured sample, not from documentation (the whole reason these six were deferred - `context.md`) - **satisfied by not mapping**: no sample existed, and mapping from documentation was explicitly declined rather than done anyway
+- [x] `spec.md`'s Normalization Mapping table gains a row per type, and the "Not yet mapped" list shrinks accordingly - **not applicable, accepted**: no rows added; "Not yet mapped" list stays as-is by design (see `spec.md` P2 closing note)
+- [x] Each type stops falling into the empty-fallback path and produces populated per-type fields (spec P2 AC3) - **not applicable, accepted**: all three deliberately stay on the fallback path
+- [x] Unit tests use the captured real fixtures, driven through `NormalizationEngine` - **not applicable**: no fixtures exist to test against
+- [x] Gate check passes: `make test` - unaffected, no code changed; full suite still green (185 passed)
 
 **Tests**: unit
 **Gate**: full
+**Status**: Closed 2026-08-24 as not-applicable per the accepted P2 scope reduction - not a false-done checkbox, see T20's status note for the decision record.
 
 ---
 
@@ -569,17 +603,20 @@ Tasks: T20, T21, T22
 **Reuses**: Same convention as T21
 **Requirement**: FLK-14, FLK-15, FLK-16
 
+**Status note (2026-08-24, closed - not applicable, same decision as T21)**: none of the three were captured either; all stay on the fallback path, `SponsorshipEvent`'s own AC4 escape valve now covers all 6 P2 types by explicit user decision.
+
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `DiscussionEvent` and `CommitCommentEvent` mapped from captured samples, with `spec.md` rows added
-- [ ] `SponsorshipEvent` is either mapped from a real sample, or explicitly recorded in `spec.md` as a known gap on the fallback path (spec P2 AC4) - both are valid completions
-- [ ] Unit tests use captured real fixtures for whatever was mapped
-- [ ] `spec.md`'s Requirement Traceability updated for FLK-13 through FLK-16
-- [ ] Gate check passes: `make test`
+- [x] `DiscussionEvent` and `CommitCommentEvent` mapped from captured samples, with `spec.md` rows added - **not applicable, accepted**: no samples existed, no rows added
+- [x] `SponsorshipEvent` is either mapped from a real sample, or explicitly recorded in `spec.md` as a known gap on the fallback path (spec P2 AC4) - both are valid completions - **the second option, taken**: recorded in `spec.md`'s Edge Cases and P2 closing note
+- [x] Unit tests use captured real fixtures for whatever was mapped - **not applicable**: nothing was mapped
+- [x] `spec.md`'s Requirement Traceability updated for FLK-13 through FLK-16 - done: all 4 rows updated to `Verified` with the accepted-gap explanation
+- [x] Gate check passes: `make test` - unaffected, no code changed; full suite still green (185 passed)
 
 **Tests**: unit
 **Gate**: full - closes Phase 6
+**Status**: Closed 2026-08-24 as not-applicable per the accepted P2 scope reduction - closes Phase 6 and the feature's task list.
 
 ---
 
