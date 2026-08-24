@@ -12,7 +12,7 @@ Authorship is not blanket: each task is `own`, `paired`, or `deliver`, derived f
 
 ## Language
 
-Chat responses: Portuguese (PT-BR), matching how the user writes. Code, identifiers, log messages, docstrings, and commit messages: English - this is already the codebase's convention (logs were deliberately migrated PT→EN; class/function/variable names have always been English). Project documents that state rules, record decisions, or summarize an external API are English too: this file, `.claude/rules/*.md`, `.claude/ref/*`, everything under `.specs/`, and `.mentor/`'s bookkeeping files (`profile.md`, `knowledge.md`, `map.md`) - they quote English identifiers throughout and `.specs/STATE.md` is their canonical source. The one exception is prose written as teaching material for the user to read: `.mentor/**/classes/` notes stay PT-BR.
+Chat: PT-BR, matching the user. Everything else is English by default (code, identifiers, logs, docstrings, commits, and every project doc - this file, `.claude/rules/*.md`, `.claude/ref/*`, `.specs/**`, and `.mentor/`'s bookkeeping files, including node ids and the `aliases`/`note` columns). One exception: class material meant for the user to read, inside `.mentor/**/classes/<topic-slug>/`, stays PT-BR.
 
 ## Source of truth
 
@@ -39,7 +39,7 @@ Any temporary file related to this project (scratch scripts, packaged archives, 
 
 ## Dev commands
 
-**Always run these with `.venv` activated** (`source .venv/bin/activate`, prompt shows `(.venv)`). The Makefile targets call bare `pytest`/`python`/`autoflake`/`isort`/`black` and rely on `PATH` resolving to `.venv/bin`; without activation they silently fall back to the system interpreter/tools (missing dev deps like `pytest-cov`, or "command not found"). If a `make` command fails this way, the fix is to activate the venv, not to hardcode `.venv/bin/...` paths into the Makefile.
+**Always run with `.venv` activated** (`source .venv/bin/activate`) - the Makefile calls bare `pytest`/`python`/etc. and relies on `PATH`, so without activation it silently falls back to the system interpreter/tools instead of failing loud. Fix by activating, never by hardcoding `.venv/bin/...` into the Makefile.
 
 - `make test` - full suite with coverage (`pytest ... --cov=. --cov-report=term-missing tests`)
 - `make neat` - format/clean (`autoflake` + `isort` + `black` over `shared ingestion tests`)
