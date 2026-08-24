@@ -60,6 +60,13 @@ Full Reason/Trade-off for every entry below: `.specs/STATE-history.md` (read on 
 - **Status**: active
 - **Rationale**: [STATE-history.md#ad-008](STATE-history.md#ad-008)
 
+### AD-009
+- **Decision**: The aggregation stage has no YAML contract. The platform's user is now assumed capable of authoring SQL directly, not only YAML - so the Flink SQL query itself (a `.sql` file, not Python, not YAML) *is* the declarative contract for this stage. It still satisfies `AD-006` (a contract is data the platform interprets, never Python the user edits) without a friendly-vocabulary layer on top, because the engine here is already a lingua franca the target user is assumed to know.
+- **Scope**: Amends `AD-006`/`PLATFORM.md`'s "Aggregation should compile to Flink SQL" section and its "What is deliberately deferred" list - "transformation and aggregation contracts" no longer applies to aggregation; there is no aggregation contract to design later, by design. Normalization is unaffected (JMESPath stays obscure enough to justify the friendly tier); transformation stays open/TBD. `PLATFORM.md`'s "Tiers of expressiveness" section gains a note: the tier discipline assumes an engine the user should not have to learn directly - when the engine is already a lingua franca (SQL), the raw-expression tier *is* the product, not an escape hatch. First applied by the `flink-aggregation` feature.
+- **Date**: 2026-08-24
+- **Status**: active
+- **Rationale**: [STATE-history.md#ad-009](STATE-history.md#ad-009)
+
 ## Handoff
 
 - **Feature**: flink-normalization
