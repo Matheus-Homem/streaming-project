@@ -68,6 +68,7 @@ class TestNormalizationApp(TestCase):
             params=KafkaSinkParams(
                 topic="events-normalized",
                 bootstrap_servers="broker-1:19092",
+                key_field="partition_key",
             )
         )
 

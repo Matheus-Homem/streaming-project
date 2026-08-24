@@ -38,6 +38,7 @@ if __name__ == "__main__":
         params=KafkaSinkParams(
             topic="events-normalized",
             bootstrap_servers=bootstrap_servers,
+            key_field="partition_key",
         )
     )
 
@@ -50,10 +51,16 @@ if __name__ == "__main__":
     )
     flatmap_function = NormalizationFlatMapFunction(normalizer=normalizer)
 
-    stream = env.from_source(
-        source=kafka_source,
-        watermark_strategy=WatermarkStrategy.no_watermarks(),
-        source_name="Normalization Stream",
+    stream = (
+        env.from_source(
+            source=kafka_source,
+            watermark_strategy=WatermarkStrategy.no_watermarks(),
+            source_name="Normalization Stream",
+        )
+        .flat_map(
+            flatmap_function,
+            output_type=Types.STRING(),
+        )
+        .sink_to(kafka_sink)
     )
-    stream.flat_map(flatmap_function, output_type=Types.STRING()).sink_to(kafka_sink)
     env.execute("normalization-job")
