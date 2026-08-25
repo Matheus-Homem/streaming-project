@@ -76,9 +76,9 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `interface/sources/github/ingestion.yml` validates against `SourceYamlEntry` with identical field values to today's `github` entry
-- [ ] `interface/sources/gitlab/ingestion.yml` validates against `SourceYamlEntry` with identical field values to today's `gitlab` entry
-- [ ] `ingestion/config/sources.yml` still exists at this point (removed in T2, once nothing reads it)
+- [x] `interface/sources/github/ingestion.yml` validates against `SourceYamlEntry` with identical field values to today's `github` entry
+- [x] `interface/sources/gitlab/ingestion.yml` validates against `SourceYamlEntry` with identical field values to today's `gitlab` entry
+- [x] `ingestion/config/sources.yml` still exists at this point (removed in T2, once nothing reads it)
 
 **Tests**: none (data files only, no code yet)
 **Gate**: quick
@@ -96,12 +96,12 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `get_source_config("github", ...)` loads `interface/sources/github/ingestion.yml` and returns a `SourceConfig` with fields identical to before the move
-- [ ] `get_source_config("gitlab", ...)` loads `interface/sources/gitlab/ingestion.yml` with the same result
-- [ ] `get_source_config("nonexistent", ...)` raises `NotImplementedError` (unchanged contract)
-- [ ] `_resolve_url`'s endpoint/param resolution logic (`models.py:90-114`) is untouched - only the loader changes
-- [ ] `tests/ingestion/test_models.py` updated to load from `interface/sources/` fixtures/paths instead of the shared file; all existing cases (valid source, unknown source, endpoint variants) still pass
-- [ ] Gate check passes: `pytest tests/ingestion/test_models.py`
+- [x] `get_source_config("github", ...)` loads `interface/sources/github/ingestion.yml` and returns a `SourceConfig` with fields identical to before the move
+- [x] `get_source_config("gitlab", ...)` loads `interface/sources/gitlab/ingestion.yml` with the same result
+- [x] `get_source_config("nonexistent", ...)` raises `NotImplementedError` (unchanged contract)
+- [x] `_resolve_url`'s endpoint/param resolution logic is untouched - only the loader changes
+- [x] `tests/ingestion/test_models.py` required no changes - it already called `get_source_config` with no path assumptions; all 29 cases pass unmodified against the relocated files
+- [x] Gate check passes: `pytest tests/ingestion/test_models.py` - 29 passed
 
 **Tests**: unit
 **Gate**: quick
@@ -119,9 +119,9 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `ingestion/config/sources.yml` no longer exists
-- [ ] `grep -r "config/sources.yml" ingestion/ tests/` returns no matches
-- [ ] `make test` shows no new failures beyond the 6-failure baseline
+- [x] `ingestion/config/sources.yml` no longer exists (`ingestion/config/` removed entirely)
+- [x] `grep -r "config/sources.yml" ingestion/ tests/` returns no matches
+- [x] `make test` shows no new failures beyond the 6-failure baseline: 189 passed, 11 subtests passed, 6 failed (same pre-existing `KAFKA_BOOTSTRAP_SERVERS` failures)
 
 **Tests**: none (deletion; covered by T2's tests still passing)
 **Gate**: quick
@@ -139,8 +139,8 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `interface/sources/github/normalization.yml` exists, byte-identical to today's `flink/normalization/sources/github.yml`
-- [ ] `flink/normalization/sources/` no longer exists
+- [x] `interface/sources/github/normalization.yml` exists, byte-identical to today's `flink/normalization/sources/github.yml` (confirmed via `diff`)
+- [x] `flink/normalization/sources/` no longer exists
 
 **Tests**: none (file move only)
 **Gate**: quick
@@ -158,11 +158,11 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `YamlContractRepository.get("github")` loads `interface/sources/github/normalization.yml` and returns a `NormalizationContract` identical to before the move
-- [ ] `YamlContractRepository.get("gitlab")` (no contract present) raises `NotImplementedError`, unchanged
-- [ ] `tests/flink/normalization/adapters/test_contract_repository.py` updated to the new path; all existing cases still pass
-- [ ] `tests/flink/normalization/test_contracts_github.py`'s `CONTRACTS_DIR` updated to `interface/sources`; the full fixture-based `NormalizedEvent` assertions still pass byte-for-byte
-- [ ] Gate check passes: `pytest tests/flink/normalization/adapters/test_contract_repository.py tests/flink/normalization/test_contracts_github.py`
+- [x] `YamlContractRepository.get("github")` loads `interface/sources/github/normalization.yml` and returns a `NormalizationContract` identical to before the move
+- [x] `YamlContractRepository.get("gitlab")` (no contract present) raises `NotImplementedError`, unchanged (verified via the existing `some_source_without_a_contract_file` case, same code path)
+- [x] `tests/flink/normalization/adapters/test_contract_repository.py`'s `CONTRACTS_DIR` updated to `interface/sources`; all 4 existing cases still pass
+- [x] `tests/flink/normalization/test_contracts_github.py`'s `CONTRACTS_DIR` updated to `interface/sources`; the full fixture-based `NormalizedEvent` assertions still pass byte-for-byte
+- [x] Gate check passes: `pytest tests/flink/normalization/adapters/test_contract_repository.py tests/flink/normalization/test_contracts_github.py` - 27 passed, 11 subtests passed
 
 **Tests**: unit
 **Gate**: quick
@@ -180,9 +180,9 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `flink/aggregation/` no longer exists
-- [ ] `flink/analytics/app.py` exists (content not yet updated - that is T7)
-- [ ] `interface/analytics/repo_counts_5m.sql` exists, byte-identical to today's `flink/aggregation/queries/repo_counts_5m.sql`
+- [x] `flink/aggregation/` no longer exists
+- [x] `flink/analytics/app.py` exists (content not yet updated - that is T7)
+- [x] `interface/analytics/repo_counts_5m.sql` exists, byte-identical to today's `flink/aggregation/queries/repo_counts_5m.sql` (git mv - content untouched)
 
 **Tests**: none (move only)
 **Gate**: quick
@@ -200,10 +200,10 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `ANALYTICS_QUERY_FILE` is the only env var read for the query file name; `AGGREGATION_QUERY_FILE` no longer appears anywhere in `flink/analytics/`
-- [ ] Query path resolves to `interface/analytics/<file>` relative to the app's runtime root
-- [ ] `split_statements` and the checkpointing/execution logic are otherwise byte-identical to `flink/aggregation/app.py`'s prior content
-- [ ] Existing `flink/aggregation`-named tests renamed to `tests/flink/analytics/test_app.py`, updated for the new env var name and path, still passing
+- [x] `ANALYTICS_QUERY_FILE` is the only env var read for the query file name; `AGGREGATION_QUERY_FILE` no longer appears anywhere in `flink/analytics/`
+- [x] Query path resolves to `interface/analytics/<file>` relative to the app's runtime root
+- [x] `split_statements` and the checkpointing/execution logic are otherwise byte-identical to `flink/aggregation/app.py`'s prior content
+- [x] No test file existed for `flink/aggregation/app.py` (`tests/flink/aggregation/` was never created) - nothing to rename; matrix's assumed precedent did not apply
 
 **Tests**: unit, matching `flink-aggregation`'s own precedent (tested only if the split/path logic is non-trivial - it already has minimal coverage from `flink-aggregation`; carry it forward under the new name)
 **Gate**: quick
@@ -221,9 +221,9 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `COPY` references `flink/analytics/` and `interface/`, not `flink/aggregation/`
-- [ ] `CMD` runs `flink/analytics/app.py`
-- [ ] No other line changed (base image, JAR download step, `requirements/flink.txt` install untouched)
+- [x] `COPY` references `flink/analytics/` and `interface/`, not `flink/aggregation/`
+- [x] `CMD` runs `flink/analytics/app.py`
+- [x] No other line changed (base image, JAR download step, `requirements/flink.txt` install untouched)
 
 **Tests**: none (build gate only)
 **Gate**: build
@@ -241,8 +241,8 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Both Dockerfiles include `COPY interface/ ./interface/` alongside their existing `COPY` lines
-- [ ] No other line changed
+- [x] Both Dockerfiles include `COPY interface/ ./interface/` alongside their existing `COPY` lines
+- [x] No other line changed
 
 **Tests**: none (build gate only)
 **Gate**: build
@@ -260,9 +260,9 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `analytics`/`taskmanager-analytics` service keys exist; `aggregation`/`taskmanager-aggregation` do not
-- [ ] `dockerfile: flink/analytics/Dockerfile`; env `ANALYTICS_QUERY_FILE: repo_counts_5m.sql`; image `apache/flink:2.3-analytics`; both `jobmanager.rpc.address` occurrences say `analytics`
-- [ ] `docker compose -f infra/docker/docker-compose.yml config` parses with no error (or, if `docker` is unavailable in this session as it was for `flink-aggregation` T5, validate via `python3 -c "import yaml; yaml.safe_load(...)"` plus a `grep`/`wc -l` check that the renamed keys appear exactly once each)
+- [x] `analytics`/`taskmanager-analytics` service keys exist; `aggregation`/`taskmanager-aggregation` do not (`container_name`, taskmanager image tag, and `depends_on` also renamed for consistency, beyond the task's literal wording but the same rename)
+- [x] `dockerfile: flink/analytics/Dockerfile`; env `ANALYTICS_QUERY_FILE: repo_counts_5m.sql`; image `apache/flink:2.3-analytics`; both `jobmanager.rpc.address` occurrences say `analytics`
+- [x] `docker` was available in this session (unlike `flink-aggregation`'s T4/T5) - `docker compose -f infra/docker/docker-compose.yml config --quiet` parses with no error
 
 **Tests**: none (config gate only)
 **Gate**: quick (offline validation) / build (if `docker` available)
