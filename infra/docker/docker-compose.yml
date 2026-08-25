@@ -163,6 +163,36 @@ services:
     depends_on:
       - normalization
 
+  aggregation:
+    build:
+      context: ../..
+      dockerfile: flink/aggregation/Dockerfile
+    container_name: aggregation
+    ports:
+      - "8082:8081"
+    environment:
+      AGGREGATION_QUERY_FILE: repo_counts_5m.sql
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: aggregation
+    depends_on:
+      topic-init:
+        condition: service_completed_successfully
+
+  taskmanager-aggregation:
+    build:
+      context: ../..
+      dockerfile: flink/aggregation/Dockerfile
+    image: apache/flink:2.3-aggregation
+    container_name: flink-taskmanager-aggregation
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: aggregation
+        taskmanager.numberOfTaskSlots: 4
+    depends_on:
+      - aggregation
+
 
 
 volumes:
