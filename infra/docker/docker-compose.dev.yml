@@ -1,0 +1,56 @@
+name: streaming-project
+
+# Dev overlay: shrinks the Kafka topology to 1 controller + 1 broker for a
+# lighter local footprint. Merge on top of the base file, never stand-alone:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# controller-2/3 and broker-2/3 are pulled out of the default run by tagging
+# them with the "full" profile - they only start again with
+# `docker compose --profile full ...`, i.e. the plain base file.
+
+services:
+  controller-2:
+    profiles: ["full"]
+
+  controller-3:
+    profiles: ["full"]
+
+  broker-2:
+    profiles: ["full"]
+
+  broker-3:
+    profiles: ["full"]
+
+  controller-1:
+    environment:
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@controller-1:9093
+
+  broker-1:
+    environment:
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@controller-1:9093
+    depends_on: !override
+      - controller-1
+
+  kafka-ui:
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker-1:19092
+    depends_on: !override
+      - broker-1
+
+  topic-init:
+    environment:
+      REPLICATION_FACTOR: 1
+    depends_on: !override
+      - broker-1
+
+  ingestion:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker-1:19092
+
+  normalization:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker-1:19092
+
+  aggregation:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker-1:19092

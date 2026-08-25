@@ -22,10 +22,17 @@ test:
 ingestion-default:
 	@python -m ingestion.app --source github
 
+COMPOSE_FILES := -f infra/docker/docker-compose.yml
+ifeq ($(MODE),dev)
+COMPOSE_FILES += -f infra/docker/docker-compose.dev.yml
+endif
+
+# MODE=dev shrinks Kafka to 1 controller + 1 broker (see infra/docker/docker-compose.dev.yml).
+# Default (no MODE, or MODE=full) keeps the full 3+3 topology.
 kafka-up:
-	@echo "🚀 Starting Kafka docker environment..."
-	@docker compose -f infra/docker/docker-compose.yml up -d
+	@echo "🚀 Starting Kafka docker environment (MODE=$(or $(MODE),full))..."
+	@docker compose $(COMPOSE_FILES) up -d
 
 kafka-down:
-	@echo "🛑 Stopping Kafka docker environment..."
-	@docker compose -f infra/docker/docker-compose.yml down --remove-orphans
+	@echo "🛑 Stopping Kafka docker environment (MODE=$(or $(MODE),full))..."
+	@docker compose $(COMPOSE_FILES) down --remove-orphans
