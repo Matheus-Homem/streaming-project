@@ -50,25 +50,16 @@ Phases are ordered and run sequentially. 11 tasks total - fits a single batch (�
 
 ### Phase 1: Ingestion reads per-source configuration (ILO-01..04)
 
-```
-T1 → T2 → T3
-```
+Order: T1, then T2, then T3. See the full dependency diagram in "Phase Execution Map" below.
 
 ### Phase 2: Normalization reads contracts from the same source directory (ILO-05..07)
 
-```
-T1 → T4 → T5
-```
+Order: T4 (depends on Phase 1's T1), then T5. See the full dependency diagram below.
 
 ### Phase 3: The analytics stage is renamed and its queries relocated (ILO-08..12)
 
-```
-T6 → T7 → T8 ─────────────┐
-T2 ────────────→ T9 ──────┤
-T5 ────────────→ T9 ──────┘→ T10 → T11
-T3 ─────────────────────────────────┤
-T5 ─────────────────────────────────┘
-```
+Order: T6, T7, T8, T9 (depends on Phase 1's T2 and Phase 2's T5), T10, T11 (depends on T3 and T5
+from earlier phases). See the full dependency diagram below.
 
 ---
 
@@ -301,13 +292,27 @@ T5 ─────────────────────────�
 
 ## Phase Execution Map
 
+Full dependency graph, every edge below matches a task's `Depends on` field exactly (see the
+Diagram-Definition Cross-Check table):
+
 ```
-Phase 1:  T1 → T2 → T3
-Phase 2:  T4 → T5
-Phase 3:  T6 → T7 → T8 → T9 → T10 → T11
+T1 → T2
+T2 → T3
+T1 → T4
+T4 → T5
+T6 → T7
+T6 → T8
+T7 → T8
+T2 → T9
+T5 → T9
+T8 → T10
+T9 → T10
+T3 → T11
+T5 → T11
+T10 → T11
 ```
 
-Phase 2 does not depend on Phase 1 completing (T4 only needs T1's directory), but phases execute in the order presented for clarity; Phase 3 is independent of Phases 1-2 until T11, which needs all three phases' changes in place to verify end to end.
+Phase 2 does not depend on Phase 1 completing (T4 only needs T1's directory), but phases execute in the order presented for clarity; Phase 3 is independent of Phases 1-2 until T9 and T11, which need earlier phases' changes in place.
 
 Execution is strictly sequential - a single worker executes one task at a time, in the order
 T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 → T9 → T10 → T11.
@@ -345,6 +350,10 @@ T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 → T9 → T10 → T11.
 | T9 | T2, T5 | T2 → T9, T5 → T9 (cross-phase) | ✅ Match |
 | T10 | T8, T9 | T8 → T10, T9 → T10 | ✅ Match |
 | T11 | T3, T5, T10 | T3 → T11, T5 → T11, T10 → T11 (cross-phase) | ✅ Match |
+
+All 14 edges above appear exactly once each in the "Phase Execution Map" diagram, with no extra
+edges - the diagram is the single authoritative graph; the per-phase orderings above it are prose,
+not additional diagrams.
 
 ## Test Co-location Validation
 
