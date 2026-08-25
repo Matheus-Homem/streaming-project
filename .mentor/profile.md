@@ -6,7 +6,7 @@
 ## Config
 
 - `spec_artifacts`: .specs/features/*/*.md
-- `active_feature`: flink-aggregation
+- `active_feature`: interface-layout
 - `gemini_notebook_id`: Streaming
 - `gemini_notebook_transport`: manual
 - `snapshot_max_age_days`: 14
