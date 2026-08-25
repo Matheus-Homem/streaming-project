@@ -7,8 +7,10 @@ CREATE TABLE normalized_event_envelope (
     'connector' = 'kafka',
     'topic' = 'events-normalized',
     'properties.bootstrap.servers' = 'broker-1:19092,broker-2:19092,broker-3:19092',
-    'format' = 'json',
-    'json.ignore-parse-errors' = 'true'
+    'properties.group.id' = 'aggregation-consumer-group',
+    'scan.startup.mode' = 'earliest-offset',
+    'json.ignore-parse-errors' = 'true',
+    'format' = 'json'
 );
 
 CREATE TABLE aggregated_event (
