@@ -1,3 +1,4 @@
+name: streaming-project
 services:
   controller-1:
     image: apache/kafka:4.3.1
@@ -124,6 +125,8 @@ services:
       context: ../..
       dockerfile: ingestion/Dockerfile
     container_name: ingestion
+    env_file:
+      - ../../.env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker-1:19092,broker-2:19092,broker-3:19092
     volumes:
@@ -148,12 +151,12 @@ services:
       topic-init:
         condition: service_completed_successfully
 
-  taskmanager:
+  taskmanager-normalization:
     build:
       context: ../..
       dockerfile: flink/normalization/Dockerfile
     image: apache/flink:2.3
-    container_name: flink-taskmanager
+    container_name: flink-taskmanager-normalization
     command: taskmanager
     environment:
       - |
