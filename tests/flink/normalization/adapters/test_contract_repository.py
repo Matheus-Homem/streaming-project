@@ -6,7 +6,7 @@ import flink.normalization
 from flink.normalization.adapters.contract_repository import YamlContractRepository
 from flink.normalization.models import FieldRule, NormalizationContract
 
-CONTRACTS_DIR = Path(flink.normalization.__file__).parent / "sources"
+CONTRACTS_DIR = Path(flink.normalization.__file__).parent.parent.parent / "interface" / "sources"
 
 
 class TestYamlContractRepository(TestCase):

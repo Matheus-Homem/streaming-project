@@ -20,7 +20,7 @@ class YamlContractRepository(ContractRepositoryPort):
         return self._cache[source]
 
     def _load(self, source: str) -> NormalizationContract:
-        path = self._contracts_dir / f"{source}.yml"
+        path = self._contracts_dir / source / "normalization.yml"
         self.logger.info(f"Loading contract for source={source} from {path}")
         try:
             with path.open() as file:
