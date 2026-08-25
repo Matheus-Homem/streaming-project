@@ -20,5 +20,6 @@ RUN pip install --no-cache-dir --break-system-packages -r requirements/flink.txt
 COPY flink/common/ ./flink/common/
 COPY flink/normalization/ ./flink/normalization/
 COPY shared/ ./shared/
+COPY interface/ ./interface/
 
 CMD ["standalone-job", "-py", "/opt/flink/usrlib/flink/normalization/app.py"]
