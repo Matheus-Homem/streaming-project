@@ -1,6 +1,8 @@
 from unittest import TestCase
 from unittest.mock import Mock
 
+from pyflink.common import Row
+
 from flink.normalization.adapters.function import NormalizationFlatMapFunction
 from flink.normalization.domain.normalizer import EventNormalizer
 from shared.models import RawEvent
@@ -22,14 +24,15 @@ class TestNormalizationFlatMapFunctionFlatMap(TestCase):
         self.normalizer = Mock(spec=EventNormalizer)
         self.function = NormalizationFlatMapFunction(normalizer=self.normalizer)
 
-    def test_can_yield_the_normalized_event_as_json(self):
+    def test_can_yield_the_normalized_event_as_a_key_value_row(self):
         normalized_event = Mock()
+        normalized_event.partition_key = "my-org/my-repo"
         normalized_event.model_dump_json.return_value = '{"source": "widget"}'
         self.normalizer.normalize.return_value = normalized_event
 
         result = list(self.function.flat_map(VALID_RAW_EVENT_JSON))
 
-        self.assertEqual(result, ['{"source": "widget"}'])
+        self.assertEqual(result, [Row(b"my-org/my-repo", b'{"source": "widget"}')])
 
     def test_can_discard_malformed_json_without_calling_the_normalizer(self):
         result = list(self.function.flat_map("not valid json"))

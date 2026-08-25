@@ -68,7 +68,6 @@ class TestNormalizationApp(TestCase):
             params=KafkaSinkParams(
                 topic="events-normalized",
                 bootstrap_servers="broker-1:19092",
-                key_field="partition_key",
             )
         )
 
@@ -105,7 +104,16 @@ class TestNormalizationApp(TestCase):
         )
         mock_stream.flat_map.assert_called_once_with(
             self.mock_flat_map_function_cls.return_value,
-            output_type=self.mock_types.STRING.return_value,
+            output_type=self.mock_types.ROW.return_value,
+        )
+        self.mock_types.ROW.assert_called_once_with(
+            [
+                self.mock_types.PRIMITIVE_ARRAY.return_value,
+                self.mock_types.PRIMITIVE_ARRAY.return_value,
+            ]
+        )
+        self.mock_types.PRIMITIVE_ARRAY.assert_called_with(
+            self.mock_types.BYTE.return_value
         )
         mock_flat_mapped_stream.sink_to.assert_called_once_with(
             self.mock_kafka_factory.create_sink.return_value
