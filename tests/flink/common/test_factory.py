@@ -26,7 +26,6 @@ class TestKafkaFactoryCreateSink(TestCase):
         params = KafkaSinkParams(
             topic="events-normalized",
             bootstrap_servers="broker-1:19092",
-            key_field="partition_key",
         )
 
         with patch("flink.common.factory.KafkaSinkAdapter") as mock_adapter_class:
