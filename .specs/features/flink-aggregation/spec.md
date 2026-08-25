@@ -13,10 +13,10 @@ is that nothing compiles *to* the SQL - it is authored directly.
 
 ## Goals
 
-- [ ] A running Flink SQL job counts `events-normalized` rows per `repo_name` per 5-minute tumbling
+- [x] A running Flink SQL job counts `events-normalized` rows per `repo_name` per 5-minute tumbling
       window (event time) and publishes one row per closed window to `events-aggregated`.
-- [ ] The job survives a restart without losing an in-flight window's partial state (checkpointing).
-- [ ] Publishing to `events-aggregated` is exactly-once - no duplicate window result after a restart.
+- [x] The job survives a restart without losing an in-flight window's partial state (checkpointing).
+- [x] Publishing to `events-aggregated` is exactly-once - no duplicate window result after a restart.
 
 ## Out of Scope
 
@@ -130,28 +130,28 @@ confirming affected windows are not re-published.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| FLA-01 | P1: Repo activity counts per window (topic provisioning) | Design | Pending |
-| FLA-02 | P1: Repo activity counts per window (source table DDL) | Design | Pending |
-| FLA-03 | P1: Repo activity counts per window (watermark strategy) | Design | Pending |
-| FLA-04 | P1: Repo activity counts per window (windowed aggregation query) | Design | Pending |
-| FLA-05 | P1: Repo activity counts per window (late-data drop) | Design | Pending |
-| FLA-06 | P1: Repo activity counts per window (malformed-row handling) | Design | Pending |
-| FLA-07 | P1: Repo activity counts per window (checkpointing) | Design | Pending |
-| FLA-08 | P1: Repo activity counts per window (exactly-once sink) | Design | Pending |
-| FLA-09 | P1: Repo activity counts per window (keyed output) | Design | Pending |
+| FLA-01 | P1: Repo activity counts per window (topic provisioning) | T1 | Verified |
+| FLA-02 | P1: Repo activity counts per window (source table DDL) | T2, T6 | Verified |
+| FLA-03 | P1: Repo activity counts per window (watermark strategy) | T2, T6 | Verified |
+| FLA-04 | P1: Repo activity counts per window (windowed aggregation query) | T2, T6 | Verified |
+| FLA-05 | P1: Repo activity counts per window (late-data drop) | T2, T6 | Verified |
+| FLA-06 | P1: Repo activity counts per window (malformed-row handling) | T2, T6 | Verified |
+| FLA-07 | P1: Repo activity counts per window (checkpointing) | T3, T6 | Verified |
+| FLA-08 | P1: Repo activity counts per window (exactly-once sink) | T2, T6 | Verified |
+| FLA-09 | P1: Repo activity counts per window (keyed output) | T2, T6 | Verified |
 
 **ID format:** `FLA-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 9 total, 0 mapped to tasks, 9 unmapped ⚠️ (Tasks phase not yet run)
+**Coverage:** 9 total, 9 mapped to tasks, 9 Verified (2026-08-25 - T6 live verification: FLA-09 agent-observed via Kafka UI screenshot, FLA-02/03/04/05/06/07/08 user-attested in chat, not independently observed by the agent - see `validation.md`'s evidence-tier note; consistent with this feature's documented live-only test strategy, Test Coverage Matrix in `tasks.md`)
 
 ---
 
 ## Success Criteria
 
-- [ ] `events-aggregated` receives one row per `repo_name` per closed 5-minute window, matching a
+- [x] `events-aggregated` receives one row per `repo_name` per closed 5-minute window, matching a
       hand-verified count against the source messages used in the Independent Test.
-- [ ] A job restart mid-window does not lose the in-flight window's partial count and does not
+- [x] A job restart mid-window does not lose the in-flight window's partial count and does not
       duplicate an already-published window's row.
-- [ ] A malformed `events-normalized` message does not stop the job.
+- [x] A malformed `events-normalized` message does not stop the job.

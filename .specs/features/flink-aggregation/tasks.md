@@ -70,10 +70,10 @@ T1, T2, T3, T4 have no dependency on each other - each is a standalone file. T5 
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `events-aggregated` is in the `TOPICS` array with `--partitions 3 --replication-factor 3 --config retention.ms=604800000`, matching the other two entries exactly
+- [x] `events-aggregated` is in the `TOPICS` array with `--partitions 3 --replication-factor 3 --config retention.ms=604800000`, matching the other two entries exactly
 
 **Tests**: none (config-only, per Test Coverage Matrix)
-**Gate**: quick
+**Gate**: quick - `make test`: 188 passed, 11 subtests, no regression (2026-08-25)
 
 ---
 
@@ -88,13 +88,13 @@ T1, T2, T3, T4 have no dependency on each other - each is a standalone file. T5 
 **Tools**: MCP: NONE (Context7 if available, to verify exact Flink 2.3 SQL connector option names - `json.ignore-parse-errors`, `sink.delivery-guarantee`, `sink.transactional-id-prefix` - per the Knowledge Verification Chain; web search as fallback) / Skill: NONE
 
 **Done when**:
-- [ ] Source table declares `partition_key`, `event_time`, a `TIMESTAMP_LTZ` computed column, and `WATERMARK FOR ... - INTERVAL '30' SECOND`
-- [ ] Source table's format option skips and logs a malformed row instead of failing the job (FLA-06)
-- [ ] Sink table declares `repo_name`, `window_start`, `window_end`, `event_count`, keyed by `repo_name` (FLA-09), with exactly-once delivery options set (FLA-08) and an explicit `transaction.timeout.ms` confirmed to sit under the broker's `transaction.max.timeout.ms` (see `design.md`'s Risks)
-- [ ] `INSERT INTO ... SELECT` uses `TABLE(TUMBLE(TABLE events_normalized, DESCRIPTOR(...), INTERVAL '5' MINUTES))`, `GROUP BY repo_name, window_start, window_end`, `COUNT(*)` (FLA-02, FLA-03, FLA-04, FLA-05)
+- [x] Source table declares `partition_key`, `event_time`, a `TIMESTAMP_LTZ` computed column, and `WATERMARK FOR ... - INTERVAL '30' SECOND`
+- [x] Source table's format option skips a malformed row instead of failing the job (FLA-06) - `json.ignore-parse-errors = 'true'`, confirmed against the official Flink Kafka connector docs; whether it also *logs* the skip (not just silently drops it) is not confirmed from docs alone - verify by reading job logs in T6, not re-opened here
+- [x] Sink table declares `repo_name`, `window_start`, `window_end`, `event_count`, keyed by `repo_name` (FLA-09), with exactly-once delivery options set (FLA-08 - `sink.delivery-guarantee`/`sink.transactional-id-prefix`) and an explicit `properties.transaction.timeout.ms = '600000'` (10 min), confirmed under the broker's default `transaction.max.timeout.ms` (15 min, unmodified in `docker-compose.yml`) - see `design.md`'s Risks, now resolved
+- [x] `INSERT INTO ... SELECT` uses `TABLE(TUMBLE(TABLE normalized_event_envelope, DESCRIPTOR(event_time_timestamp), INTERVAL '5' MINUTE))`, `GROUP BY partition_key, window_start, window_end`, `COUNT(*) AS event_count` (FLA-02, FLA-03, FLA-04, FLA-05) - positional syntax confirmed against official docs (the named-argument form first attempted, `DATA => / TIMECOL => / SIZE =>`, was not found documented anywhere and was dropped)
 
 **Tests**: none (live-verified in T6, per Test Coverage Matrix)
-**Gate**: quick (no PyFlink runtime check possible in isolation; real verification is T6)
+**Gate**: quick - no PyFlink runtime check possible in isolation; SQL correctness reviewed statement-by-statement against `spec.md`'s ACs and the official Flink Kafka/Windowing-TVF docs across several review rounds (2026-08-25) - real runtime verification is T6. Table/column names ended up as `normalized_event_envelope` (not `events_normalized` as design.md's Done-When draft said) and `aggregated_event` (not `events_aggregated`) - deliberate naming decision made mid-task (the source table is a narrow envelope-only projection, not a full mirror of the topic; see chat), doesn't change the topic names it maps to.
 
 ---
 
@@ -109,12 +109,12 @@ T1, T2, T3, T4 have no dependency on each other - each is a standalone file. T5 
 **Tools**: MCP: Context7 if available (verify the exact PyFlink `TableEnvironment` API for running multiple statements from one file - per Knowledge Verification Chain, flagged uncertain in `design.md`'s Risks) / Skill: NONE
 
 **Done when**:
-- [ ] Checkpointing enabled with a 60-second interval (per `spec.md`'s Assumptions), default state backend
-- [ ] Query file path resolved from `AGGREGATION_QUERY_FILE`, no hardcoded filename anywhere in the file
-- [ ] Statements split and executed in source-file order (source `CREATE TABLE`, sink `CREATE TABLE`, `INSERT INTO...SELECT`)
+- [x] Checkpointing enabled with a 60-second interval (`env.enable_checkpointing(60000)`, per `spec.md`'s Assumptions); default state backend - no code needed, confirmed intentional per `design.md`'s Tech Decisions, not an omission
+- [x] Query file path resolved from `AGGREGATION_QUERY_FILE`, no hardcoded filename anywhere in the file
+- [x] Statements split (`;`-delimited, stripped, empty pieces filtered) and executed in source-file order via `execute_sql()`; the last statement's `TableResult.wait()` (no timeout - confirmed via docs that a timeout raises `TimeoutException` once it elapses, which a never-finishing streaming job would always hit) keeps the process alive, replacing the DataStream-only `env.execute()` pattern that doesn't apply to a Table API job
 
-**Tests**: unit, only if the statement-splitting logic is non-trivial - see Test Coverage Matrix (skip if the split is a straightforward `;`-delimited loop with no edge case worth a test)
-**Gate**: quick
+**Tests**: none - the statement-splitting logic stayed a straightforward `;`-split + strip + filter, matching the Test Coverage Matrix's skip condition
+**Gate**: quick - `make test`: 188 passed, 11 subtests, no regression (2026-08-25); `flink/aggregation/` correctly shows at low coverage (no PyFlink runtime test possible in isolation, per the matrix) - real verification is T6. Several review rounds caught real bugs before landing: `env.execute()` (DataStream API, doesn't apply here) instead of `result.wait()`; `.wait(30000)` then `.wait(600000000)` (a streaming job never "finishes", so any timeout eventually raises `TimeoutException` - needs no argument); a `split_statements` regression to per-line splitting that would have fed single lines to `execute_sql()`; the `AGGREGATION_QUERY_FILE` env var name drifting to `query_name` for a few rounds; a leftover `print(stmt)` debug line; a `"Executinf"` typo, missed twice before being fixed.
 
 ---
 
@@ -129,18 +129,18 @@ T1, T2, T3, T4 have no dependency on each other - each is a standalone file. T5 
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Same base image and JAR download step as `flink/normalization/Dockerfile`
-- [ ] `COPY` includes `flink/aggregation/` and `shared/`; does not include `flink/common/`
-- [ ] `CMD` runs `standalone-job -py /opt/flink/usrlib/flink/aggregation/app.py`
+- [x] Same base image and JAR download step as `flink/normalization/Dockerfile`
+- [x] `COPY` includes `flink/aggregation/` and `shared/`; does not include `flink/common/`
+- [x] `CMD` runs `standalone-job -py /opt/flink/usrlib/flink/aggregation/app.py`
 
 **Tests**: none (build gate only)
-**Gate**: build
+**Gate**: build - `docker` unavailable in this session's environment (no WSL integration; same gap `STATE.md` already flagged for a prior `flink-normalization` session) - real `docker build` deferred to T6, which is where it gets exercised for real anyway. File reviewed by hand against `flink/normalization/Dockerfile` line by line, no drift found.
 
 ---
 
 ### T5: Wire `docker-compose.yml`
 
-**What**: Add `aggregation` (jobmanager, `standalone-job -py flink/aggregation/app.py`, env `KAFKA_BOOTSTRAP_SERVERS` + `AGGREGATION_QUERY_FILE=repo_counts_5m.sql`, `depends_on: topic-init: condition: service_completed_successfully`) and `taskmanager-aggregation` (`depends_on: aggregation`), mirroring the existing `normalization`/`taskmanager` service pair.
+**What**: Add `aggregation` (jobmanager, `standalone-job -py flink/aggregation/app.py`, env `AGGREGATION_QUERY_FILE=repo_counts_5m.sql` - no `KAFKA_BOOTSTRAP_SERVERS`, since T2's `.sql` hardcodes the broker addresses directly, a decision made during T2's review - `depends_on: topic-init: condition: service_completed_successfully`) and `taskmanager-aggregation` (`depends_on: aggregation`), mirroring the existing `normalization`/`taskmanager` service pair.
 **Where**: `infra/docker/docker-compose.yml`
 **Depends on**: T1 (topic must exist for the job to attach to), T4 (image must build)
 **Reuses**: The `normalization`/`taskmanager` service definitions as the template
@@ -149,9 +149,11 @@ T1, T2, T3, T4 have no dependency on each other - each is a standalone file. T5 
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] `aggregation` service builds from `flink/aggregation/Dockerfile`, sets `AGGREGATION_QUERY_FILE=repo_counts_5m.sql`, depends on `topic-init` completing successfully
-- [ ] `taskmanager-aggregation` service depends on `aggregation`
-- [ ] `docker compose -f infra/docker/docker-compose.yml config` parses with no error
+- [x] `aggregation` service builds from `flink/aggregation/Dockerfile`, sets `AGGREGATION_QUERY_FILE=repo_counts_5m.sql`, depends on `topic-init` completing successfully
+- [x] `taskmanager-aggregation` service depends on `aggregation`
+- [x] `docker compose -f infra/docker/docker-compose.yml config` parses with no error - `docker` unavailable in this session (same gap as T4); validated instead with `python3 -c "import yaml; yaml.safe_load(...)"` (well-formed YAML) and `grep`/`wc -l` against the raw file (`aggregation`/`taskmanager-aggregation` keys appear exactly once each, 200 lines total) after a VS Code `compose-language-service` false-positive DUPLICATE_KEY diagnostic turned out to be a stale editor buffer, not a real duplication on disk. Real `docker compose config` deferred to T6.
+
+Two decisions made while writing this task, not previously specced: Web UI port `8082:8081` (8081 is already taken by `normalization`); taskmanager image tagged `apache/flink:2.3-aggregation` rather than reusing `apache/flink:2.3` (reusing it would have overwritten the normalization taskmanager's tagged image on build, since `image:` + `build:` together makes compose tag the built result under that name).
 
 **Tests**: none (config gate only)
 **Gate**: quick
@@ -169,12 +171,12 @@ T1, T2, T3, T4 have no dependency on each other - each is a standalone file. T5 
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Correct `event_count` per `repo_name`/window, matching a hand count of the published messages (Success Criteria #1)
-- [ ] The late-arriving event is absent from any window's count, no job failure (FLA-05)
-- [ ] The malformed message is skipped, logged, job keeps running (FLA-06)
-- [ ] Restarting `aggregation` mid-window resumes the partial count, does not reset to zero (FLA-07, Edge Case)
-- [ ] Restarting `aggregation` after a window was already published does not produce a duplicate row (FLA-08, Success Criteria #2)
-- [ ] `events-aggregated` records are keyed by `repo_name` in Kafka UI, not only in the JSON payload (FLA-09)
+- [x] Correct `event_count` per `repo_name`/window, matching a hand count of the published messages (Success Criteria #1) - user-confirmed 2026-08-25, not directly observed by the agent
+- [x] The late-arriving event is absent from any window's count, no job failure (FLA-05) - user-confirmed 2026-08-25, not directly observed by the agent
+- [x] The malformed message is skipped, logged, job keeps running (FLA-06) - user-confirmed 2026-08-25, not directly observed by the agent
+- [x] Restarting `aggregation` mid-window resumes the partial count, does not reset to zero (FLA-07, Edge Case) - user-confirmed 2026-08-25, not directly observed by the agent
+- [x] Restarting `aggregation` after a window was already published does not produce a duplicate row (FLA-08, Success Criteria #2) - user-confirmed 2026-08-25, not directly observed by the agent
+- [x] `events-aggregated` records are keyed by `repo_name` in Kafka UI, not only in the JSON payload (FLA-09) - confirmed 2026-08-25: Kafka UI's Key column shows `{"repo_name":"..."}` as the physical record key, not just present inside the value payload
 
 **Tests**: none - this task *is* the test (Test Coverage Matrix)
 **Gate**: full
