@@ -18,9 +18,9 @@ def split_statements(sql_text: str) -> list[str]:
 
 def main():
     logger = getLogger("AggregationApplication")
-    query_file = os.environ["AGGREGATION_QUERY_FILE"]
+    query_file = os.environ["ANALYTICS_QUERY_FILE"]
 
-    query_path = Path(__file__).parent / "queries" / query_file
+    query_path = Path(__file__).parent.parent.parent / "interface" / "analytics" / query_file
     logger.info(f"Starting application for query={query_file}")
 
     env = StreamExecutionEnvironment.get_execution_environment()
