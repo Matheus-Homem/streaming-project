@@ -1,6 +1,4 @@
-import json
-
-from pyflink.common.serialization import SerializationSchema, SimpleStringSchema
+from pyflink.common.serialization import RowFieldExtractorSchema
 from pyflink.datastream.connectors.kafka import (
     KafkaRecordSerializationSchema,
     KafkaSink,
@@ -8,16 +6,6 @@ from pyflink.datastream.connectors.kafka import (
 
 from flink.common.models import KafkaSinkParams
 from flink.common.ports import EventSinkPort
-
-
-class JsonFieldSerializationSchema(SerializationSchema):
-
-    def __init__(self, key_field: str):
-        self._key_field = key_field
-
-    def serialize(self, element) -> bytes:
-        value: str = json.loads(element)[self._key_field]
-        return value.encode()
 
 
 class KafkaSinkAdapter(EventSinkPort):
@@ -34,10 +22,8 @@ class KafkaSinkAdapter(EventSinkPort):
             .set_record_serializer(
                 KafkaRecordSerializationSchema.builder()
                 .set_topic(self._params.topic)
-                .set_key_serialization_schema(
-                    JsonFieldSerializationSchema(self._params.key_field)
-                )
-                .set_value_serialization_schema(SimpleStringSchema())
+                .set_key_serialization_schema(RowFieldExtractorSchema(0))
+                .set_value_serialization_schema(RowFieldExtractorSchema(1))
                 .build()
             )
             .build()

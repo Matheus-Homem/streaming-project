@@ -18,6 +18,7 @@ class IngestionClient(IngestionClientPort):
     ):
         self.logger = getLogger(self.__class__.__name__)
         self.session = session or Session()
+        self.session.headers.update(source_config.resolve_auth_header())
         self.source_config = source_config
         self.url = source_config.url
 

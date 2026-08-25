@@ -6,7 +6,7 @@
 ## Config
 
 - `spec_artifacts`: .specs/features/*/*.md
-- `active_feature`: flink-normalization
+- `active_feature`: flink-aggregation
 - `gemini_notebook_id`: Streaming
 - `gemini_notebook_transport`: manual
 - `snapshot_max_age_days`: 14
@@ -28,3 +28,9 @@
 - MCP for the "Streaming" Gemini Notebook was tried and is not working (2026-08-21);
   transport stays `manual` until the user reports it working. Do not probe again
   automatically — only on `--detect-mcp` per the command's own rule.
+- Node ids in `nodes.md` are English (e.g. `StreamProcessing.ApacheFlink.Windowing.TumblingWindowViaTvf`),
+  not Portuguese, despite `references/knowledge-model.md`'s own examples being Portuguese - user
+  correction, 2026-08-24, consistent with `CLAUDE.md`'s "identifiers: English" rule. Propose new
+  canonical ids in English going forward, still confirming with the user before writing, per usual.
+  The `aliases` column stays whatever the user actually types (often Portuguese) - only the id itself
+  is translated.

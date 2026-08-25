@@ -2,9 +2,11 @@
 
 MAX_ATTEMPTS=12
 INTERVAL=15
+REPLICATION_FACTOR="${REPLICATION_FACTOR:-3}"
 TOPICS=(
     "events-raw"
     "events-normalized"
+    "events-aggregated"
 )
 
 for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
@@ -19,7 +21,7 @@ for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
             --if-not-exists \
             --topic "$topic" \
             --partitions 3 \
-            --replication-factor 3 \
+            --replication-factor "$REPLICATION_FACTOR" \
             --config retention.ms=604800000; then
 
             success=false

@@ -1,4 +1,5 @@
 from pydantic import ValidationError
+from pyflink.common import Row
 from pyflink.datastream.functions import FlatMapFunction, RuntimeContext
 
 from flink.normalization.domain.normalizer import EventNormalizer
@@ -36,4 +37,6 @@ class NormalizationFlatMapFunction(NormalizationFlatMapFunctionPort, FlatMapFunc
             )
             return
 
-        yield normalized_event.model_dump_json()
+        key = normalized_event.partition_key.encode()
+        value = normalized_event.model_dump_json().encode()
+        yield Row(key, value)

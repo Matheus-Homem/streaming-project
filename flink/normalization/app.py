@@ -38,7 +38,6 @@ if __name__ == "__main__":
         params=KafkaSinkParams(
             topic="events-normalized",
             bootstrap_servers=bootstrap_servers,
-            key_field="partition_key",
         )
     )
 
@@ -59,7 +58,12 @@ if __name__ == "__main__":
         )
         .flat_map(
             flatmap_function,
-            output_type=Types.STRING(),
+            output_type=Types.ROW(
+                [
+                    Types.PRIMITIVE_ARRAY(Types.BYTE()),
+                    Types.PRIMITIVE_ARRAY(Types.BYTE()),
+                ]
+            ),
         )
         .sink_to(kafka_sink)
     )

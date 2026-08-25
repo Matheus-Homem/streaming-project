@@ -1,8 +1,10 @@
 import unittest
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
 from ingestion.models import (
+    AuthConfig,
     EventModel,
     SourceConfig,
     SourceYamlEntry,
@@ -43,6 +45,24 @@ class TestSourceYamlEntry(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SourceYamlEntry(**payload)
 
+    def test_auth_defaults_to_none_when_omitted(self):
+        entry = SourceYamlEntry(**self._valid_payload())
+        self.assertIsNone(entry.auth)
+
+    def test_auth_block_is_parsed_when_present(self):
+        entry = SourceYamlEntry(
+            **self._valid_payload(
+                auth={
+                    "env_var": "GITHUB_TOKEN",
+                    "header": "Authorization",
+                    "value_template": "Bearer {token}",
+                }
+            )
+        )
+        self.assertEqual(entry.auth.env_var, "GITHUB_TOKEN")
+        self.assertEqual(entry.auth.header, "Authorization")
+        self.assertEqual(entry.auth.value_template, "Bearer {token}")
+
 
 class TestEventModel(unittest.TestCase):
 
@@ -69,6 +89,9 @@ class TestGetSourceConfig(unittest.TestCase):
         self.assertEqual(config.endpoints["default"], "https://api.github.com/events")
         self.assertEqual(config.id_field, "id")
         self.assertEqual(config.type_field, "type")
+        self.assertEqual(config.auth.env_var, "GITHUB_TOKEN")
+        self.assertEqual(config.auth.header, "Authorization")
+        self.assertEqual(config.auth.value_template, "Bearer {token}")
 
     def test_returns_config_for_gitlab(self):
         config = get_source_config("gitlab")
@@ -76,6 +99,7 @@ class TestGetSourceConfig(unittest.TestCase):
         self.assertEqual(config.endpoints["default"], "https://gitlab.com")
         self.assertEqual(config.id_field, "id")
         self.assertEqual(config.type_field, "object_kind")
+        self.assertIsNone(config.auth)
 
     def test_raises_not_implemented_for_unknown_source(self):
         with self.assertRaises(NotImplementedError):
@@ -139,7 +163,7 @@ class TestSourceConfigUrlResolution(unittest.TestCase):
 
 class TestSourceConfigAccessors(unittest.TestCase):
 
-    def _config(self, id_field="id", type_field="type"):
+    def _config(self, id_field="id", type_field="type", auth=None):
         return SourceConfig(
             source="github",
             endpoints={"default": "https://api.github.com/events"},
@@ -147,6 +171,7 @@ class TestSourceConfigAccessors(unittest.TestCase):
                 "rate_limit_remaining": "X-RateLimit-Remaining",
                 "rate_limit_reset": "X-RateLimit-Reset",
             },
+            auth=auth,
             id_field=id_field,
             type_field=type_field,
             variant="default",
@@ -185,6 +210,70 @@ class TestSourceConfigAccessors(unittest.TestCase):
 
         self.assertEqual(config.rate_limit_remaining, "X-RateLimit-Remaining")
         self.assertEqual(config.rate_limit_reset, "X-RateLimit-Reset")
+
+
+class TestResolveAuthHeader(unittest.TestCase):
+
+    def _auth(self, **overrides):
+        payload = {
+            "env_var": "GITHUB_TOKEN",
+            "header": "Authorization",
+            "value_template": "Bearer {token}",
+        }
+        payload.update(overrides)
+        return AuthConfig(**payload)
+
+    def _config(self, auth):
+        return SourceConfig(
+            source="github",
+            endpoints={"default": "https://api.github.com/events"},
+            headers={
+                "rate_limit_remaining": "X-RateLimit-Remaining",
+                "rate_limit_reset": "X-RateLimit-Reset",
+            },
+            auth=auth,
+            id_field="id",
+            type_field="type",
+            variant="default",
+            url="https://api.github.com/events",
+        )
+
+    def test_no_auth_configured_returns_empty_dict(self):
+        config = self._config(auth=None)
+
+        self.assertEqual(config.resolve_auth_header(), {})
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_auth_configured_but_env_var_unset_returns_empty_dict(self):
+        config = self._config(auth=self._auth())
+
+        self.assertEqual(config.resolve_auth_header(), {})
+
+    @patch.dict("os.environ", {"GITHUB_TOKEN": ""}, clear=True)
+    def test_auth_configured_but_env_var_blank_returns_empty_dict(self):
+        config = self._config(auth=self._auth())
+
+        self.assertEqual(config.resolve_auth_header(), {})
+
+    @patch.dict("os.environ", {"GITHUB_TOKEN": "abc123"}, clear=True)
+    def test_auth_configured_and_env_var_set_returns_header(self):
+        config = self._config(auth=self._auth())
+
+        self.assertEqual(
+            config.resolve_auth_header(), {"Authorization": "Bearer abc123"}
+        )
+
+    @patch.dict("os.environ", {"GITLAB_TOKEN": "xyz789"}, clear=True)
+    def test_header_name_and_template_come_from_config_not_hardcoded(self):
+        config = self._config(
+            auth=self._auth(
+                env_var="GITLAB_TOKEN",
+                header="PRIVATE-TOKEN",
+                value_template="{token}",
+            )
+        )
+
+        self.assertEqual(config.resolve_auth_header(), {"PRIVATE-TOKEN": "xyz789"})
 
 
 if __name__ == "__main__":

@@ -10,4 +10,3 @@ class KafkaSourceParams(BaseModel):
 class KafkaSinkParams(BaseModel):
     topic: str
     bootstrap_servers: str
-    key_field: str

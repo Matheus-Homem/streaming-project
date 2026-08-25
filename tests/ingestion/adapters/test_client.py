@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 from requests import Response, Session
 
@@ -13,6 +13,7 @@ class TestIngestionClient(unittest.TestCase):
 
     def setUp(self):
         self.session_mock = Mock(spec=Session)
+        self.session_mock.headers = MagicMock()
 
     def _build_client(
         self,
@@ -47,6 +48,20 @@ class TestIngestionClient(unittest.TestCase):
         )
 
         self.assertEqual(client.url, "https://api.github.com/orgs/anthropics/events")
+
+    @patch.dict("os.environ", {"GITHUB_TOKEN": "abc123"}, clear=True)
+    def test_auth_header_is_applied_to_the_session_on_init(self):
+        self._build_client()
+
+        self.session_mock.headers.update.assert_called_once_with(
+            {"Authorization": "Bearer abc123"}
+        )
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_no_auth_header_applied_when_token_env_var_unset(self):
+        self._build_client()
+
+        self.session_mock.headers.update.assert_called_once_with({})
 
     def test_client_exposes_the_resolved_source_config(self):
         client = self._build_client(

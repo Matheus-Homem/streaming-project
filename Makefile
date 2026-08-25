@@ -2,6 +2,11 @@ export PYTHONDONTWRITEBYTECODE := 1
 
 .PHONY: neat test clean ingestion-default kafka-up kafka-down
 
+COMPOSE_FILES := -f infra/docker/docker-compose.yml
+ifeq ($(MODE),dev)
+COMPOSE_FILES += -f infra/docker/docker-compose.dev.yml
+endif
+
 clean:
 	@echo "🧼 Cleaning cache files..."
 	@find . -type f -name "*.pyc" ! -path "./.venv/*" -delete
@@ -23,9 +28,9 @@ ingestion-default:
 	@python -m ingestion.app --source github
 
 kafka-up:
-	@echo "🚀 Starting Kafka docker environment..."
-	@docker compose -f infra/docker/docker-compose.yml up -d
+	@echo "🚀 Starting Kafka docker environment (MODE=$(or $(MODE),full))..."
+	@docker compose $(COMPOSE_FILES) up -d
 
 kafka-down:
-	@echo "🛑 Stopping Kafka docker environment..."
-	@docker compose -f infra/docker/docker-compose.yml down --remove-orphans
+	@echo "🛑 Stopping Kafka docker environment (MODE=$(or $(MODE),full))..."
+	@docker compose $(COMPOSE_FILES) down --remove-orphans
