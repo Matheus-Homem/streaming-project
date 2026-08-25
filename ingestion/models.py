@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -15,9 +16,16 @@ class EventModel(BaseModel):
     type: str
 
 
+class AuthConfig(BaseModel):
+    env_var: str
+    header: str
+    value_template: str
+
+
 class SourceYamlEntry(BaseModel):
     endpoints: dict[str, str]
     headers: dict[str, str]
+    auth: AuthConfig | None = None
     id_field: str
     type_field: str
 
@@ -27,10 +35,21 @@ class SourceConfig:
     source: str
     endpoints: dict[str, str]
     headers: dict[str, str]
+    auth: AuthConfig | None
     id_field: str
     type_field: str
     variant: str
     url: str
+
+    def resolve_auth_header(self) -> dict[str, str]:
+        if self.auth is None:
+            return {}
+
+        token = os.environ.get(self.auth.env_var)
+        if not token:
+            return {}
+
+        return {self.auth.header: self.auth.value_template.format(token=token)}
 
     def get_event_id(self, event: dict) -> str:
         return self._get_nested_value(event, self.id_field)
@@ -111,6 +130,7 @@ def get_source_config(
         source=source,
         endpoints=entry.endpoints,
         headers=entry.headers,
+        auth=entry.auth,
         id_field=entry.id_field,
         type_field=entry.type_field,
         variant=variant,
