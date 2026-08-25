@@ -5,6 +5,7 @@ INTERVAL=15
 TOPICS=(
     "events-raw"
     "events-normalized"
+    "events-aggregated"
 )
 
 for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
