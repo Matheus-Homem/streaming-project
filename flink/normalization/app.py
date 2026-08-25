@@ -42,7 +42,7 @@ if __name__ == "__main__":
     )
 
     contract_repository = YamlContractRepository(
-        contracts_dir=Path(__file__).parent / "sources"
+        contracts_dir=Path(__file__).parent.parent.parent / "interface" / "sources"
     )
     normalizer = EventNormalizer(
         event_evaluator=NormalizationRulesEventEvaluator(),
