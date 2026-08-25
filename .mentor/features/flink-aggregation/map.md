@@ -5,7 +5,7 @@
      See references/task-matrix.md. -->
 
 - Opened: 2026-08-24
-- Closed:
+- Closed: 2026-08-25
 - Spec source: `.specs/features/flink-aggregation/spec.md` (task list proposed in conversation during Design/Tasks handshake; `tasks.md` not yet written — pending the design-pairing STOP POINT 2 confirmation, per `.claude/mentor-design-pairing.md`)
 - Snapshot: 2026-08-21T09:57:09Z (3 days old, within the 14-day budget - not stale)
 - Task key used: explicit id (T1-T6, as proposed in chat; `tasks.md` will carry the same ids when written)
