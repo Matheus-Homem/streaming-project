@@ -22,13 +22,13 @@ class TestNormalizationApp(TestCase):
             patch("pyflink.common.typeinfo.Types"),
             patch("flink.common.KafkaFactory"),
             patch(
-                "flink.normalization.adapters.contract_repository.YamlContractRepository"
+                "flink.normalization.domain.contract_repository.YamlContractRepository"
             ),
             patch(
                 "flink.normalization.domain.evaluator.NormalizationRulesEventEvaluator"
             ),
             patch("flink.normalization.domain.normalizer.EventNormalizer"),
-            patch("flink.normalization.adapters.function.NormalizationFlatMapFunction"),
+            patch("flink.normalization.adapters.transformer.FlinkTransformerAdapter"),
         ]
         (
             self.mock_load_dotenv,

@@ -8,8 +8,8 @@ from pyflink.common.watermark_strategy import WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment
 
 from flink.common import KafkaFactory, KafkaSinkParams, KafkaSourceParams
-from flink.normalization.adapters.contract_repository import YamlContractRepository
-from flink.normalization.adapters.function import NormalizationFlatMapFunction
+from flink.normalization.adapters.transformer import FlinkTransformerAdapter
+from flink.normalization.domain.contract_repository import YamlContractRepository
 from flink.normalization.domain.evaluator import NormalizationRulesEventEvaluator
 from flink.normalization.domain.normalizer import EventNormalizer
 from shared.logger import setup_logging
@@ -47,7 +47,7 @@ def main(
         event_evaluator=NormalizationRulesEventEvaluator(),
         contract_repository=contract_repository,
     )
-    flatmap_function = NormalizationFlatMapFunction(normalizer=normalizer)
+    flatmap_function = FlinkTransformerAdapter(normalizer=normalizer)
 
     stream = (
         env.from_source(
