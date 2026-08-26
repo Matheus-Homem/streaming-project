@@ -5,7 +5,7 @@
      See references/task-matrix.md. -->
 
 - Opened: 2026-08-25
-- Closed:
+- Closed: 2026-08-26
 - Spec source: `.specs/features/interface-layout/tasks.md`
 - Snapshot: 2026-08-21T09:57:09Z (4 days old, within the 14-day budget - not stale). Snapshot's own
   `nodes` array is empty (no Comprehension data recorded for anything yet) - Comprehension resolves
