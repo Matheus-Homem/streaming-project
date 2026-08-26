@@ -1,7 +1,37 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+from ingestion.models import SourceConfig
 from shared.models import RawEvent
+
+
+class IngestionSourceConfigPort(ABC):
+    """Resolves and provides a source's ingestion configuration."""
+
+    @abstractmethod
+    def get(
+        self,
+        source: str,
+        endpoint: str | None = None,
+        endpoint_params: dict[str, str] | None = None,
+    ) -> SourceConfig:
+        """Return the SourceConfig for a source, with its endpoint variant resolved.
+
+        Args:
+            source (str): Source identifier to look up the configuration for.
+            endpoint (str | None): Endpoint variant to resolve; defaults to the source's
+                default variant when omitted.
+            endpoint_params (dict[str, str] | None): Parameters to fill into the
+                endpoint's URL template.
+
+        Returns:
+            SourceConfig: The resolved configuration, including its final URL.
+
+        Raises:
+            NotImplementedError: If the source has no configuration defined.
+            ValueError: If the endpoint variant is unsupported or a required
+                parameter is missing.
+        """
 
 
 class IngestionClientPort(ABC):
