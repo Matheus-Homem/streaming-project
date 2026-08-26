@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest import TestCase
 
 import ingestion
-from ingestion.adapters.source_config_repository import YamlSourceConfigRepository
+from ingestion.domain.source_config_repository import YamlSourceConfigRepository
 
 SOURCES_DIR = Path(ingestion.__file__).parent.parent / "interface" / "sources"
 

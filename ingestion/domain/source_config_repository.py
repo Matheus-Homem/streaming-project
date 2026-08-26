@@ -3,13 +3,13 @@ from string import Formatter
 
 import yaml
 
+from ingestion.domain import SourceConfigRepository
 from ingestion.models import SourceConfig, SourceYamlEntry
-from ingestion.ports import IngestionSourceConfigPort
 
 DEFAULT_ENDPOINT_VARIANT = "default"
 
 
-class YamlSourceConfigRepository(IngestionSourceConfigPort):
+class YamlSourceConfigRepository(SourceConfigRepository):
 
     def __init__(self, sources_dir: Path):
         self._sources_dir = sources_dir
