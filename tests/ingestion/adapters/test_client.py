@@ -1,12 +1,16 @@
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 from requests import Response, Session
 
+import ingestion
 from ingestion.adapters.client import IngestionClient
-from ingestion.models import get_source_config
+from ingestion.adapters.source_config_repository import YamlSourceConfigRepository
 from ingestion.utils import RateLimitError
+
+SOURCES_DIR = Path(ingestion.__file__).parent.parent / "interface" / "sources"
 
 
 class TestIngestionClient(unittest.TestCase):
@@ -14,6 +18,9 @@ class TestIngestionClient(unittest.TestCase):
     def setUp(self):
         self.session_mock = Mock(spec=Session)
         self.session_mock.headers = MagicMock()
+        self.source_config_repository = YamlSourceConfigRepository(
+            sources_dir=SOURCES_DIR
+        )
 
     def _build_client(
         self,
@@ -22,7 +29,9 @@ class TestIngestionClient(unittest.TestCase):
         endpoint_params: dict[str, str] = None,
     ):
         return IngestionClient(
-            source_config=get_source_config(source, endpoint, endpoint_params),
+            source_config=self.source_config_repository.get(
+                source, endpoint, endpoint_params
+            ),
             session=self.session_mock,
         )
 

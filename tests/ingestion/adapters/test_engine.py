@@ -1,7 +1,12 @@
 import unittest
+from pathlib import Path
 
+import ingestion
 from ingestion.adapters.engine import IngestionEngine
-from ingestion.models import get_source_config
+from ingestion.adapters.source_config_repository import YamlSourceConfigRepository
+
+SOURCES_DIR = Path(ingestion.__file__).parent.parent / "interface" / "sources"
+source_config_repository = YamlSourceConfigRepository(sources_dir=SOURCES_DIR)
 
 
 def _valid_github_event(event_id="1", event_type="PushEvent"):
@@ -19,7 +24,7 @@ def _valid_github_event(event_id="1", event_type="PushEvent"):
 class TestIngestionEngine(unittest.TestCase):
 
     def setUp(self):
-        self.source_config = get_source_config("github")
+        self.source_config = source_config_repository.get("github")
         self.engine = IngestionEngine(self.source_config)
 
     def test_format_events_with_valid_events_returns_event_models(self):
@@ -56,7 +61,7 @@ class TestIngestionEngine(unittest.TestCase):
         self.assertEqual(formatted[0].id, "1")
 
     def test_format_events_uses_configured_nested_type_field(self):
-        source_config = get_source_config("gitlab")
+        source_config = source_config_repository.get("gitlab")
         engine = IngestionEngine(source_config)
 
         formatted = engine._format_events([{"id": "1", "object_kind": "push"}])
@@ -78,7 +83,7 @@ class TestIngestionEngine(unittest.TestCase):
         self.assertEqual(raw_event.payload["id"], "1")
 
     def test_process_records_the_endpoint_variant_in_use(self):
-        source_config = get_source_config(
+        source_config = source_config_repository.get(
             "github", "organization", {"org": "anthropics"}
         )
         engine = IngestionEngine(source_config)
