@@ -3,11 +3,11 @@ from pathlib import Path
 
 import yaml
 
+from flink.normalization.domain import ContractRepository
 from flink.normalization.models import NormalizationContract
-from flink.normalization.ports import ContractRepositoryPort
 
 
-class YamlContractRepository(ContractRepositoryPort):
+class YamlContractRepository(ContractRepository):
 
     def __init__(self, contracts_dir: Path):
         self.logger = getLogger(self.__class__.__name__)

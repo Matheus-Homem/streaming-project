@@ -3,7 +3,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 import flink.normalization
-from flink.normalization.adapters.contract_repository import YamlContractRepository
+from flink.normalization.domain.contract_repository import YamlContractRepository
 from flink.normalization.models import FieldRule, NormalizationContract
 
 CONTRACTS_DIR = (
@@ -36,7 +36,7 @@ class TestYamlContractRepository(TestCase):
         broken_contract = {"source": "github"}
 
         with patch(
-            "flink.normalization.adapters.contract_repository.yaml.safe_load",
+            "flink.normalization.domain.contract_repository.yaml.safe_load",
             return_value=broken_contract,
         ):
             with self.assertRaises(ValueError) as context:
@@ -47,7 +47,7 @@ class TestYamlContractRepository(TestCase):
     def test_can_cache_result_for_repeated_calls_with_the_same_source(self):
         first_call = self.repository.get("github")
         with patch(
-            "flink.normalization.adapters.contract_repository.yaml.safe_load"
+            "flink.normalization.domain.contract_repository.yaml.safe_load"
         ) as mock_safe_load:
             second_call = self.repository.get("github")
 
