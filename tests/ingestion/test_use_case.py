@@ -1,22 +1,18 @@
 import unittest
 from unittest.mock import Mock, call
 
-from ingestion.adapters import IngestionTracker
-from ingestion.ports import (
-    IngestionClientPort,
-    IngestionEnginePort,
-    IngestionProducerPort,
-)
+from ingestion.domain import DuplicateTracker, RawEventFormatter
+from ingestion.ports import EventClientPort, EventProducerPort
 from ingestion.use_case import IngestionPipeline
 
 
 class TestIngestionPipeline(unittest.TestCase):
 
     def setUp(self):
-        self.client_mock = Mock(spec=IngestionClientPort)
-        self.engine_mock = Mock(spec=IngestionEnginePort)
-        self.producer_mock = Mock(spec=IngestionProducerPort)
-        self.tracker_mock = Mock(spec=IngestionTracker)
+        self.client_mock = Mock(spec=EventClientPort)
+        self.engine_mock = Mock(spec=RawEventFormatter)
+        self.producer_mock = Mock(spec=EventProducerPort)
+        self.tracker_mock = Mock(spec=DuplicateTracker)
         self.pipeline = IngestionPipeline(
             client=self.client_mock,
             engine=self.engine_mock,

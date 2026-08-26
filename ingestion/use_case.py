@@ -1,21 +1,17 @@
 from logging import getLogger
 
-from ingestion.ports import (
-    IngestionClientPort,
-    IngestionEnginePort,
-    IngestionProducerPort,
-    IngestionTrackerPort,
-)
+from ingestion.domain import DuplicateTracker, RawEventFormatter
+from ingestion.ports import EventClientPort, EventProducerPort
 
 
 class IngestionPipeline:
 
     def __init__(
         self,
-        client: IngestionClientPort,
-        engine: IngestionEnginePort,
-        producer: IngestionProducerPort,
-        tracker: IngestionTrackerPort,
+        client: EventClientPort,
+        engine: RawEventFormatter,
+        producer: EventProducerPort,
+        tracker: DuplicateTracker,
     ):
         self.logger = getLogger(self.__class__.__name__)
         self.client = client
