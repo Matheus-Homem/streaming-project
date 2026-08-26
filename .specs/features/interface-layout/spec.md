@@ -168,29 +168,36 @@ messages, inspect `events-aggregated` in Kafka UI), confirm identical results.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| ILO-01 | P1: Ingestion per-source config | Tasks | Pending |
-| ILO-02 | P1: Ingestion per-source config | Tasks | Pending |
-| ILO-03 | P1: Ingestion per-source config | Tasks | Pending |
-| ILO-04 | P1: Ingestion per-source config | Tasks | Pending |
-| ILO-05 | P2: Normalization contract relocation | Tasks | Pending |
-| ILO-06 | P2: Normalization contract relocation | Tasks | Pending |
-| ILO-07 | P2: Normalization contract relocation | Tasks | Pending |
-| ILO-08 | P3: Analytics stage rename | Tasks | Pending |
-| ILO-09 | P3: Analytics stage rename | Tasks | Pending |
-| ILO-10 | P3: Analytics stage rename | Tasks | Pending |
-| ILO-11 | P3: Analytics stage rename | Tasks | Pending |
-| ILO-12 | P3: Analytics stage rename | Tasks | Pending |
+| ILO-01 | P1: Ingestion per-source config | Execute (T1, T2) | Verified |
+| ILO-02 | P1: Ingestion per-source config | Execute (T1, T2) | Verified |
+| ILO-03 | P1: Ingestion per-source config | Execute (T2) | Verified |
+| ILO-04 | P1: Ingestion per-source config | Execute (T3) | Verified |
+| ILO-05 | P2: Normalization contract relocation | Execute (T4, T5) | Verified |
+| ILO-06 | P2: Normalization contract relocation | Execute (T5) | Verified |
+| ILO-07 | P2: Normalization contract relocation | Execute (T5) | Verified |
+| ILO-08 | P3: Analytics stage rename | Execute (T6) | Verified |
+| ILO-09 | P3: Analytics stage rename | Execute (T7) | Verified |
+| ILO-10 | P3: Analytics stage rename | Execute (T8, T9) | Verified |
+| ILO-11 | P3: Analytics stage rename | Execute (T10) | Verified |
+| ILO-12 | P3: Analytics stage rename | Execute (T11) | Verified - see `tasks.md` T11 for the one known gap found (restart/checkpoint durability, pre-existing, not a regression) |
 
-**Coverage:** 12 total, 0 mapped to tasks yet, 12 unmapped ⚠️ (mapped during Tasks phase)
+**Coverage:** 12 total, 12 mapped to tasks, 0 unmapped
 
 ---
 
 ## Success Criteria
 
-- [ ] `make test` passes with no regression (same pass count as `flink-aggregation`'s last run, 188
-      passed + 11 subtests, adjusted only for path-dependent test updates)
-- [ ] `docker compose -f infra/docker/docker-compose.yml up` reproduces `flink-aggregation` T6's
-      live-verified result exactly, under the renamed stage
-- [ ] `ingestion/config/sources.yml` and `flink/normalization/sources/github.yml` no longer exist -
+- [x] `make test` passes clean: **196 passed, 11 subtests passed, 0 failures** - even with
+      `KAFKA_BOOTSTRAP_SERVERS` explicitly absent from the environment. The 6 failures seen earlier in
+      this feature's execution were mischaracterized as a pre-existing environment gap; the real cause
+      (a test isolation bug - 6 of `TestMain`'s tests never patched that env var into `os.environ`,
+      unlike their 2 siblings) was found and fixed during T2's code review - see `tasks.md`'s baseline
+      correction, dated 2026-08-26
+- [x] `docker compose -f infra/docker/docker-compose.yml up` reproduces `flink-aggregation` T6's
+      live-verified result under the renamed stage, with one caveat found (not a regression - see
+      T11's live-verification notes and `flink-aggregation/validation.md`'s 2026-08-26 addendum): a
+      job restart does not resume from a checkpoint (no durable checkpoint storage configured),
+      pre-existing behavior never independently verified before this feature's testing
+- [x] `ingestion/config/sources.yml` and `flink/normalization/sources/github.yml` no longer exist -
       `interface/sources/*/` is the only place either configuration is read from
-- [ ] `flink/aggregation/` no longer exists - `flink/analytics/` is the only analytics module
+- [x] `flink/aggregation/` no longer exists - `flink/analytics/` is the only analytics module

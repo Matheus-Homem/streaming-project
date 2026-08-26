@@ -13,7 +13,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: skipped - pure relocation, no architectural decision (per `spec.md`'s scope and the already-approved `tmp/platform-refactor-plan-v2.md`)
-**Status**: Approved
+**Status**: Done
 
 ---
 
@@ -40,7 +40,9 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | Full | After the live-verification task | `docker compose -f infra/docker/docker-compose.yml up`, re-run `flink-aggregation` T6's exact procedure against the renamed stage |
 | Build | Phase completion (Docker/compose changes) | `docker compose -f infra/docker/docker-compose.yml config` (syntax) + `docker compose ... build` |
 
-**Baseline (recorded before this feature's first task, 2026-08-25)**: `make test` → **189 passed, 11 subtests passed, 6 failed**. The 6 failures (`tests/ingestion/test_app.py::TestMain::*`, all `KeyError: 'KAFKA_BOOTSTRAP_SERVERS'`) are **pre-existing and unrelated** to this feature - an environment-variable gap in the local test shell, not caused by any task here. Quick gates below compare against **189 passed / 11 subtests**, not the 6 known failures; a gate that introduces new failures beyond those 6 is a real regression.
+**Baseline (recorded before this feature's first task, 2026-08-25)**: `make test` → **189 passed, 11 subtests passed, 6 failed**. The 6 failures (`tests/ingestion/test_app.py::TestMain::*`, all `KeyError: 'KAFKA_BOOTSTRAP_SERVERS'`) were treated as pre-existing and unrelated at the time - an apparent environment-variable gap in the local test shell. Quick gates through T10 below compare against **189 passed / 11 subtests**, not the 6 known failures.
+
+**Correction (2026-08-26)**: the "environment gap" framing was wrong. Investigated during the `ingestion/models.py` code review that produced the `YamlSourceConfigRepository` refactor (see T2's notes): 6 of `TestMain`'s 8 tests never patched `KAFKA_BOOTSTRAP_SERVERS` into `os.environ` at all - only the 2 tests that specifically exercise that env var's presence/absence did. They only ever passed by coincidence, riding on whatever the ambient shell happened to have set. Fixed by adding the same `@patch.dict(os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"})` the other 2 tests already used. `make test` now passes **196/196, 11 subtests, 0 failures** - even with `KAFKA_BOOTSTRAP_SERVERS` explicitly absent from the environment (`env -u KAFKA_BOOTSTRAP_SERVERS make test`). This is the true baseline from this point forward; the "189 passed / 6 pre-existing failures" framing earlier in this file is superseded, not deleted.
 
 ---
 
@@ -162,7 +164,8 @@ from earlier phases). See the full dependency diagram below.
 - [x] `YamlContractRepository.get("gitlab")` (no contract present) raises `NotImplementedError`, unchanged (verified via the existing `some_source_without_a_contract_file` case, same code path)
 - [x] `tests/flink/normalization/adapters/test_contract_repository.py`'s `CONTRACTS_DIR` updated to `interface/sources`; all 4 existing cases still pass
 - [x] `tests/flink/normalization/test_contracts_github.py`'s `CONTRACTS_DIR` updated to `interface/sources`; the full fixture-based `NormalizedEvent` assertions still pass byte-for-byte
-- [x] Gate check passes: `pytest tests/flink/normalization/adapters/test_contract_repository.py tests/flink/normalization/test_contracts_github.py` - 27 passed, 11 subtests passed
+- [x] **Correction (2026-08-26, found during T11's `make test` re-run):** `tests/flink/normalization/test_app.py`'s `CONTRACTS_DIR` (asserting the exact `contracts_dir` passed to `YamlContractRepository` in `app.py`) was missed in the original T5 pass - it kept asserting the old `flink/normalization/sources` path and failed once `app.py`'s `contracts_dir` was repointed. Fixed the same way as the other two files; full suite back to the 189-passed/11-subtests baseline
+- [x] Gate check passes: `pytest tests/flink/normalization/adapters/test_contract_repository.py tests/flink/normalization/test_contracts_github.py tests/flink/normalization/test_app.py` - all passing, no regression
 
 **Tests**: unit
 **Gate**: quick
@@ -280,10 +283,10 @@ from earlier phases). See the full dependency diagram below.
 **Tools**: MCP: NONE / Skill: NONE
 
 **Done when**:
-- [ ] Ingestion polls GitHub normally under the relocated `ingestion.yml` (endpoint URL and auth resolved identically to before)
-- [ ] Normalization produces identical `NormalizedEvent` output under the relocated `normalization.yml`
-- [ ] The renamed `analytics` service produces output in `events-aggregated` identical to `flink-aggregation`'s 2026-08-25 T6 result
-- [ ] No regression in any of the five specific checks T6 already covers (counts, late-drop, malformed-skip, mid-window resume, no-duplicate-on-restart)
+- [x] Ingestion polls GitHub normally under the relocated `ingestion.yml` - agent-observed: real polling against `https://api.github.com/events`, auth resolved, 30 events/poll published to `events-raw` on schedule
+- [x] Normalization produces identical `NormalizedEvent` output under the relocated `normalization.yml` - agent-observed: real `events-normalized` messages inspected via `kafka-console-consumer`, correct envelope+common shape (`partition_key`, `entity_id`, `entity_name`, `repo_id`, `repo_name`, `org_id`, `org_login`, `public`); the pre-existing "unmapped event type falls back to envelope+common" behavior (e.g. `PushEvent`, not declared in `github.yml`'s `event_types`) reproduced unchanged
+- [x] The renamed `analytics` service produces output in `events-aggregated` matching `flink-aggregation`'s T6 result **for 4 of 5 checks** - agent-observed: correct per-window counts keyed by `repo_name` (physical Kafka key, confirmed via `--property print.key=true`), a hand-crafted malformed message did not kill the job, a hand-crafted late event (`event_time` far in the past) did not appear in any window's count
+- [x] **Restart/no-duplicate check does NOT match** - a real restart of the `analytics` container caused a full reprocess of `events-normalized` from `earliest-offset` (536 → 2569 aggregated rows after one restart), because no durable checkpoint storage is configured for `env.enable_checkpointing(60000)`. **Not a regression from this feature** - the checkpointing config is byte-identical to what `flink-aggregation` shipped; this is a pre-existing gap that `flink-aggregation`'s own T6 never independently observed (its AC7/AC8 were user-attested only, per `flink-aggregation/validation.md`). Recorded there as a dated addendum (2026-08-26) rather than silently passed here. Decided with the user: register as a known gap, do not fix under this feature's scope, and proceed
 
 **Tests**: none - this task *is* the test (Test Coverage Matrix)
 **Gate**: full
