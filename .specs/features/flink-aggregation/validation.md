@@ -168,4 +168,12 @@ Isolation verified: `git status --porcelain` matched the pre-sensor baseline aft
 2. (Minor, informational) The "empty topic at job start" edge case from `spec.md` was not explicitly exercised in T6's live procedure (T6's messages were all non-empty). Structurally sound (no code path assumes non-empty input) but not independently evidenced.
 3. (Doc-only) T1's "Done when" text says `--replication-factor 3`; the actual script applies `--replication-factor 1` uniformly to all three topics (pre-existing behavior, unchanged by this feature). Cosmetic task-doc drift, not a functional issue.
 
+---
+
+### Addendum (2026-08-26, from `interface-layout` T11 live verification)
+
+**AC8 ("no duplicate row after restart") does not hold as an independently observed fact.** This was PASS above on user-attested evidence alone (Evidence-Tier Note). During `interface-layout`'s own live verification of the renamed `analytics` stage - same query, same checkpointing config, only the module/paths renamed - an agent independently restarted the job container mid-stream and observed `events-aggregated`'s row count jump from 536 to 2569 on a single restart: the job re-read `events-normalized` from `scan.startup.mode = 'earliest-offset'` and reprocessed everything, because `env.enable_checkpointing(60000)` has no configured state backend / durable checkpoint storage location, so a container restart (`standalone-job` always resubmits the job graph fresh) has no checkpoint to resume from.
+
+This is **not a regression introduced by `interface-layout`** - the checkpointing configuration is byte-identical to what shipped here, untouched by that feature's relocation work. It is a real, pre-existing gap in this feature's fault-tolerance story that AC7/AC8's user-attested evidence did not catch. Not fixed here (out of scope for a layout-relocation feature) - recorded as a known gap for whoever next touches the analytics/aggregation job's checkpointing.
+
 **Next steps**: None required to close this feature - all 9 FLA requirements have code-level evidence and T6's live procedure covered all Success Criteria. If the team wants a stronger evidence bar in the future for live-only features, consider a lightweight capture step (log excerpt or screenshot) for each T6 sub-item beyond FLA-09.
