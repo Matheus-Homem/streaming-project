@@ -1,6 +1,6 @@
+from flink.normalization.domain import ContractRepository, EventEvaluator
 from flink.normalization.domain.utils import to_millis
-from flink.normalization.models import EventEvaluator, NormalizedEvent
-from flink.normalization.ports import ContractRepositoryPort
+from flink.normalization.models import NormalizedEvent
 from shared.models import RawEvent
 
 NORMALIZED_SCHEMA_VERSION = 1
@@ -13,7 +13,7 @@ class EventNormalizer:
     def __init__(
         self,
         event_evaluator: EventEvaluator,
-        contract_repository: ContractRepositoryPort,
+        contract_repository: ContractRepository,
     ):
         self._event_evaluator = event_evaluator
         self._contract_repository = contract_repository
