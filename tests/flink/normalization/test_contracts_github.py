@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest import TestCase
 
 import flink.normalization
-from flink.normalization.adapters.contract_repository import YamlContractRepository
+from flink.normalization.domain.contract_repository import YamlContractRepository
 from flink.normalization.domain.evaluator import NormalizationRulesEventEvaluator
 from flink.normalization.domain.normalizer import EventNormalizer
 from shared.models import RawEvent
