@@ -5,13 +5,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from ingestion.adapters import (
-    IngestionClient,
-    IngestionEngine,
-    IngestionProducer,
-    IngestionTracker,
-    YamlSourceConfigRepository,
-)
+from ingestion.adapters import KafkaProducerAdapter, RequestsClientAdapter
+from ingestion.domain.formatter import ValidatingRawEventFormatter
+from ingestion.domain.source_config_repository import YamlSourceConfigRepository
+from ingestion.domain.tracker import InMemoryDuplicateTracker
 from ingestion.models import SourceConfig
 from ingestion.use_case import IngestionPipeline
 from ingestion.utils import RateLimitError, RetryTimer
@@ -19,6 +16,8 @@ from shared.logger import setup_logging
 
 load_dotenv()
 setup_logging(warning_level_loggers=["kafka"])
+
+SOURCES_DIR = Path(__file__).parent.parent / "interface" / "sources"
 
 
 def build_arguments():
@@ -71,10 +70,10 @@ def configure_ingestion_pipeline(
     bootstrap_servers: list[str],
 ) -> IngestionPipeline:
     return IngestionPipeline(
-        client=IngestionClient(source_config),
-        engine=IngestionEngine(source_config),
-        producer=IngestionProducer(bootstrap_servers),
-        tracker=IngestionTracker(120),
+        client=RequestsClientAdapter(source_config),
+        engine=ValidatingRawEventFormatter(source_config),
+        producer=KafkaProducerAdapter(bootstrap_servers),
+        tracker=InMemoryDuplicateTracker(120),
     )
 
 
@@ -110,9 +109,7 @@ def main(
 
 if __name__ == "__main__":
     args = build_arguments()
-    source_config_repository = YamlSourceConfigRepository(
-        sources_dir=Path(__file__).parent.parent / "interface" / "sources"
-    )
+    source_config_repository = YamlSourceConfigRepository(sources_dir=SOURCES_DIR)
 
     main(
         bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"].split(","),
