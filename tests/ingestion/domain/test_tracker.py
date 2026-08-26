@@ -1,13 +1,13 @@
 import unittest
 from collections import deque
 
-from ingestion.adapters.tracker import IngestionTracker
+from ingestion.domain.tracker import InMemoryDuplicateTracker
 
 
-class TestIngestionTracker(unittest.TestCase):
+class TestInMemoryDuplicateTracker(unittest.TestCase):
 
     def _get_tracker(self, max_size: int = 200):
-        return IngestionTracker(max_size)
+        return InMemoryDuplicateTracker(max_size)
 
     def test_initialize(self):
         max_size = 100
