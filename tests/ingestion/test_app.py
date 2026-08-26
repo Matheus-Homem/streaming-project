@@ -8,15 +8,18 @@ from ingestion.adapters import (
     IngestionClient,
     IngestionEngine,
     IngestionProducer,
+    YamlSourceConfigRepository,
 )
 from ingestion.app import (
+    SOURCES_DIR,
     build_arguments,
     configure_ingestion_pipeline,
     main,
     parse_endpoint_params,
 )
-from ingestion.models import get_source_config
 from ingestion.utils import RateLimitError
+
+source_config_repository = YamlSourceConfigRepository(sources_dir=SOURCES_DIR)
 
 
 def _args(**overrides):
@@ -97,7 +100,7 @@ class TestParseEndpointParams(unittest.TestCase):
 class TestConfigureIngestionPipeline(unittest.TestCase):
 
     def test_builds_pipeline_from_source_config(self):
-        source_config = get_source_config("github")
+        source_config = source_config_repository.get("github")
 
         pipeline = configure_ingestion_pipeline(source_config, ["broker:9092"])
 
@@ -106,7 +109,7 @@ class TestConfigureIngestionPipeline(unittest.TestCase):
         self.assertIsInstance(pipeline.producer, IngestionProducer)
 
     def test_client_and_engine_share_the_same_config(self):
-        source_config = get_source_config(
+        source_config = source_config_repository.get(
             "github", "organization", {"org": "anthropics"}
         )
 
@@ -161,6 +164,9 @@ class TestMain(unittest.TestCase):
         bootstrap_servers = mock_configure_pipeline.call_args.args[1]
         self.assertEqual(bootstrap_servers, ["broker-1:19092", "broker-2:19092"])
 
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
     @patch("ingestion.app.build_arguments")
@@ -186,6 +192,9 @@ class TestMain(unittest.TestCase):
         timer.reset.assert_called_once()
         timer.sleep.assert_called_once()
 
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
     @patch("ingestion.app.build_arguments")
@@ -214,6 +223,9 @@ class TestMain(unittest.TestCase):
             "https://api.github.com/networks/kubernetes/kubernetes/events",
         )
 
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
     @patch("ingestion.app.build_arguments")
@@ -231,6 +243,9 @@ class TestMain(unittest.TestCase):
 
         mock_configure_pipeline.assert_not_called()
 
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
     @patch("ingestion.app.build_arguments")
@@ -250,6 +265,9 @@ class TestMain(unittest.TestCase):
 
         mock_configure_pipeline.assert_not_called()
 
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
     @patch("ingestion.app.build_arguments")
@@ -275,6 +293,9 @@ class TestMain(unittest.TestCase):
         timer.sleep.assert_called_once()
         timer.increase.assert_called_once()
 
+    @patch.dict(
+        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
+    )
     @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
     @patch("ingestion.app.build_arguments")
