@@ -6,14 +6,14 @@ from unittest.mock import MagicMock, Mock, patch
 from requests import Response, Session
 
 import ingestion
-from ingestion.adapters.client import IngestionClient
-from ingestion.adapters.source_config_repository import YamlSourceConfigRepository
+from ingestion.adapters.client import RequestsClientAdapter
+from ingestion.domain.source_config_repository import YamlSourceConfigRepository
 from ingestion.utils import RateLimitError
 
 SOURCES_DIR = Path(ingestion.__file__).parent.parent / "interface" / "sources"
 
 
-class TestIngestionClient(unittest.TestCase):
+class TestRequestsClientAdapter(unittest.TestCase):
 
     def setUp(self):
         self.session_mock = Mock(spec=Session)
@@ -28,7 +28,7 @@ class TestIngestionClient(unittest.TestCase):
         endpoint: str = None,
         endpoint_params: dict[str, str] = None,
     ):
-        return IngestionClient(
+        return RequestsClientAdapter(
             source_config=self.source_config_repository.get(
                 source, endpoint, endpoint_params
             ),
