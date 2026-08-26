@@ -18,14 +18,15 @@ load_dotenv()
 setup_logging()
 
 
-if __name__ == "__main__":
+def main(
+    bootstrap_servers: str,
+    contracts_dir: Path,
+    env: StreamExecutionEnvironment,
+):
     logger = getLogger("NormalizationApplication")
-    bootstrap_servers = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
     logger.info(
         f"Starting normalization application, bootstrap_servers={bootstrap_servers}"
     )
-
-    env = StreamExecutionEnvironment.get_execution_environment()
 
     kafka_source = KafkaFactory.create_source(
         params=KafkaSourceParams(
@@ -41,9 +42,7 @@ if __name__ == "__main__":
         )
     )
 
-    contract_repository = YamlContractRepository(
-        contracts_dir=Path(__file__).parent.parent.parent / "interface" / "sources"
-    )
+    contract_repository = YamlContractRepository(contracts_dir=contracts_dir)
     normalizer = EventNormalizer(
         event_evaluator=NormalizationRulesEventEvaluator(),
         contract_repository=contract_repository,
@@ -68,3 +67,11 @@ if __name__ == "__main__":
         .sink_to(kafka_sink)
     )
     env.execute("normalization-job")
+
+
+if __name__ == "__main__":
+    main(
+        bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+        contracts_dir=Path(__file__).parent.parent.parent / "interface" / "sources",
+        env=StreamExecutionEnvironment.get_execution_environment(),
+    )

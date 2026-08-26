@@ -6,7 +6,9 @@ from unittest.mock import patch
 import flink.normalization
 from flink.common.models import KafkaSinkParams, KafkaSourceParams
 
-CONTRACTS_DIR = Path(flink.normalization.__file__).parent / "sources"
+CONTRACTS_DIR = (
+    Path(flink.normalization.__file__).parent.parent.parent / "interface" / "sources"
+)
 
 
 class TestNormalizationApp(TestCase):
