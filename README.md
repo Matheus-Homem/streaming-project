@@ -6,7 +6,7 @@ See [`.specs/RFC.md`](.specs/RFC.md) for the full motivation and learning goals,
 
 ## Architecture
 
-**Today**: [`ingestion/`](ingestion/) polls a source's public events API (GitHub wired, GitLab config-only), formats payloads into a `RawEvent` envelope ([Pydantic](https://docs.pydantic.dev/), [`shared/models.py`](shared/models.py)), and publishes them to a single Kafka topic (`events-raw`, shared across sources — the `source` field is what tells events apart downstream). [`flink/normalization/`](flink/normalization/) consumes `events-raw`, applies a per-source declarative contract (YAML, no source-specific Python), and publishes `NormalizedEvent`s, keyed by `partition_key`, to `events-normalized`. [`flink/analytics/`](flink/analytics/) runs a Flink SQL job (Table API) over `events-normalized`, windowing counts into `events-aggregated`. Local infra (3 controllers + 3 brokers + Kafka UI on `localhost:8080`, Flink job/task managers per stage) runs via [`infra/docker/docker-compose.yml`](infra/docker/docker-compose.yml).
+**Today**: [`ingestion/`](ingestion/) polls a source's public events API (GitHub wired, GitLab config-only), formats payloads into a `RawEvent` envelope ([Pydantic](https://docs.pydantic.dev/), [`shared/models.py`](shared/models.py)), and publishes them to a single Kafka topic (`events-raw`, shared across sources — the `source` field is what tells events apart downstream). [`flink/normalization/`](flink/normalization/) consumes `events-raw`, applies a per-source declarative contract (YAML, no source-specific Python), and publishes `NormalizedEvent`s, keyed by `partition_key`, to `events-normalized`. [`flink/analytics/`](flink/analytics/) runs a Flink SQL job (Table API) over `events-normalized`, windowing counts into `events-analytics`. Local infra (3 controllers + 3 brokers + Kafka UI on `localhost:8080`, Flink job/task managers per stage) runs via [`infra/docker/docker-compose.yml`](infra/docker/docker-compose.yml).
 
 Both ingestion sources and the normalization contract for each source are declared as data, not Python — see [`interface/`](interface/) below and [`.specs/PLATFORM.md`](.specs/PLATFORM.md) for why.
 
@@ -21,7 +21,7 @@ GitHub/GitLab Events API --> ingestion (client -> formatter -> producer) --> Kaf
                                                                                   |
                                                               flink/analytics (Flink SQL, windowed counts)
                                                                                   |
-                                                                       Kafka (events-aggregated)
+                                                                       Kafka (events-analytics)
                                                                                   |
                                                                     [planned] OpenSearch --> Grafana
 ```
