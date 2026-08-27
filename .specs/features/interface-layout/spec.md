@@ -137,14 +137,14 @@ and `interface/analytics/`, not the old names.
    (replacing `aggregation`/`taskmanager-aggregation`), with the taskmanager image tagged
    `apache/flink:2.3-analytics` (replacing `-aggregation`).
 5. WHEN `repo_counts_5m.sql` runs under the renamed stage with `ANALYTICS_QUERY_FILE=repo_counts_5m.sql`
-   THEN the system SHALL produce output in `events-aggregated` identical to `flink-aggregation`'s
+   THEN the system SHALL produce output in `events-analytics` identical to `flink-aggregation`'s
    T6 live-verified result (2026-08-25): correct per-window counts, late event dropped, malformed
    message skipped without killing the job, mid-window restart resumes state, post-window restart
    produces no duplicate.
 
 **Independent Test**: `docker compose -f infra/docker/docker-compose.yml up`, re-run
 `flink-aggregation`'s T6 procedure exactly (publish the same hand-crafted `events-normalized`
-messages, inspect `events-aggregated` in Kafka UI), confirm identical results.
+messages, inspect `events-analytics` in Kafka UI), confirm identical results.
 
 ---
 
@@ -188,16 +188,12 @@ messages, inspect `events-aggregated` in Kafka UI), confirm identical results.
 ## Success Criteria
 
 - [x] `make test` passes clean: **196 passed, 11 subtests passed, 0 failures** - even with
-      `KAFKA_BOOTSTRAP_SERVERS` explicitly absent from the environment. The 6 failures seen earlier in
-      this feature's execution were mischaracterized as a pre-existing environment gap; the real cause
-      (a test isolation bug - 6 of `TestMain`'s tests never patched that env var into `os.environ`,
-      unlike their 2 siblings) was found and fixed during T2's code review - see `tasks.md`'s baseline
-      correction, dated 2026-08-26
+      `KAFKA_BOOTSTRAP_SERVERS` explicitly absent from the environment (see `tasks.md` T2 for the
+      test-isolation fix behind this)
 - [x] `docker compose -f infra/docker/docker-compose.yml up` reproduces `flink-aggregation` T6's
-      live-verified result under the renamed stage, with one caveat found (not a regression - see
-      T11's live-verification notes and `flink-aggregation/validation.md`'s 2026-08-26 addendum): a
-      job restart does not resume from a checkpoint (no durable checkpoint storage configured),
-      pre-existing behavior never independently verified before this feature's testing
+      live-verified result under the renamed stage, with one pre-existing, non-regression caveat: a
+      job restart does not resume from a checkpoint (no durable checkpoint storage configured) - see
+      `tasks.md` T11 and `flink-aggregation/validation.md`
 - [x] `ingestion/config/sources.yml` and `flink/normalization/sources/github.yml` no longer exist -
       `interface/sources/*/` is the only place either configuration is read from
 - [x] `flink/aggregation/` no longer exists - `flink/analytics/` is the only analytics module
