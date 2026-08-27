@@ -5,11 +5,11 @@ from typing import Any
 from requests import Response, Session
 
 from ingestion.models import SourceConfig
-from ingestion.ports import IngestionClientPort
+from ingestion.ports import EventClientPort
 from ingestion.utils import RateLimitError
 
 
-class IngestionClient(IngestionClientPort):
+class RequestsClientAdapter(EventClientPort):
 
     def __init__(
         self,

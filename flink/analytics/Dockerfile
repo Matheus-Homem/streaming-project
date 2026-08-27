@@ -17,7 +17,8 @@ ENV PYTHONPATH=/opt/flink/usrlib:${PYTHONPATH}
 COPY requirements/ ./requirements/
 RUN pip install --no-cache-dir --break-system-packages -r requirements/flink.txt
 
-COPY flink/aggregation/ ./flink/aggregation/
+COPY flink/analytics/ ./flink/analytics/
 COPY shared/ ./shared/
+COPY interface/ ./interface/
 
-CMD ["standalone-job", "-py", "/opt/flink/usrlib/flink/aggregation/app.py"]
+CMD ["standalone-job", "-py", "/opt/flink/usrlib/flink/analytics/app.py"]

@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements/ingestion.txt
 
 COPY ingestion/ ./ingestion/
 COPY shared/ ./shared/
+COPY interface/ ./interface/
 
 
 CMD ["python", "-m", "ingestion.app", "--source", "github"]

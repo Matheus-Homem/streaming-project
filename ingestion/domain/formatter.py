@@ -4,14 +4,14 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from ingestion.domain import RawEventFormatter
 from ingestion.models import EventModel, SourceConfig
-from ingestion.ports import IngestionEnginePort
 from shared.models import RawEvent
 
 RAW_EVENT_SCHEMA_VERSION = 1
 
 
-class IngestionEngine(IngestionEnginePort):
+class ValidatingRawEventFormatter(RawEventFormatter):
 
     def __init__(self, source_config: SourceConfig):
         self.logger = getLogger(self.__class__.__name__)

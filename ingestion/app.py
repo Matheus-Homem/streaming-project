@@ -1,22 +1,23 @@
 import argparse
 import os
 from logging import getLogger
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-from ingestion.adapters import (
-    IngestionClient,
-    IngestionEngine,
-    IngestionProducer,
-    IngestionTracker,
-)
-from ingestion.models import SourceConfig, get_source_config
+from ingestion.adapters import KafkaProducerAdapter, RequestsClientAdapter
+from ingestion.domain.formatter import ValidatingRawEventFormatter
+from ingestion.domain.source_config_repository import YamlSourceConfigRepository
+from ingestion.domain.tracker import InMemoryDuplicateTracker
+from ingestion.models import SourceConfig
 from ingestion.use_case import IngestionPipeline
 from ingestion.utils import RateLimitError, RetryTimer
 from shared.logger import setup_logging
 
 load_dotenv()
 setup_logging(warning_level_loggers=["kafka"])
+
+SOURCES_DIR = Path(__file__).parent.parent / "interface" / "sources"
 
 
 def build_arguments():
@@ -57,7 +58,7 @@ def parse_endpoint_params(params: list[str]) -> dict[str, str]:
         key, separator, value = param.partition("=")
         if not separator:
             raise ValueError(
-                f"Invalid endpoint parameter: {param!r}. " "Expected KEY=VALUE."
+                f"Invalid endpoint parameter: {param!r}. Expected KEY=VALUE."
             )
         result[key] = value
 
@@ -69,33 +70,21 @@ def configure_ingestion_pipeline(
     bootstrap_servers: list[str],
 ) -> IngestionPipeline:
     return IngestionPipeline(
-        client=IngestionClient(source_config),
-        engine=IngestionEngine(source_config),
-        producer=IngestionProducer(bootstrap_servers),
-        tracker=IngestionTracker(
-            120
-        ),  # Cover 4 polls with 30 events/poll, which is the window that the API tend to resend the same event
+        client=RequestsClientAdapter(source_config),
+        engine=ValidatingRawEventFormatter(source_config),
+        producer=KafkaProducerAdapter(bootstrap_servers),
+        tracker=InMemoryDuplicateTracker(120),
     )
 
 
-def main():
+def main(
+    bootstrap_servers: list[str],
+    timer: RetryTimer,
+    source_config: SourceConfig,
+):
     logger = getLogger("IngestionApplication")
-    bootstrap_servers = os.environ["KAFKA_BOOTSTRAP_SERVERS"].split(",")
-
-    args = build_arguments()
-    source_type: str = args.source
-    timer = RetryTimer(int(args.poll_interval))
-    source_config = get_source_config(
-        source=source_type,
-        endpoint=args.endpoint,
-        endpoint_params=parse_endpoint_params(args.param),
-    )
-
     logger.info(
-        f"Starting application for source={source_type} with poll_interval={args.poll_interval}"
-    )
-    logger.info(
-        f"Using endpoint '{source_config.variant}' resolved to '{source_config.url}'"
+        f"Starting application for source={source_config.variant} with url={source_config.url}"
     )
 
     ingestion_pipeline = configure_ingestion_pipeline(source_config, bootstrap_servers)
@@ -107,16 +96,27 @@ def main():
             timer.reset().sleep()
         except RateLimitError as e:
             logger.warning(
-                f"Extraction from {source_type.upper()} reached rate-limit: {e}"
+                f"Extraction from {source_config.variant.upper()} reached rate-limit: {e}"
             )
             timer.schedule_sleep(e.reset_at).reset()
         except Exception:
             logger.error(
-                f"Extraction from {source_type.upper()} finished with unexpected errors"
+                f"Extraction from {source_config.variant.upper()} finished with unexpected errors"
             )
             logger.error(f"Sleeping for {timer} seconds")
             timer.sleep().increase()
 
 
 if __name__ == "__main__":
-    main()
+    args = build_arguments()
+    source_config_repository = YamlSourceConfigRepository(sources_dir=SOURCES_DIR)
+
+    main(
+        bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"].split(","),
+        timer=RetryTimer(int(args.poll_interval)),
+        source_config=source_config_repository.get(
+            source=args.source,
+            endpoint=args.endpoint,
+            endpoint_params=parse_endpoint_params(args.param),
+        ),
+    )

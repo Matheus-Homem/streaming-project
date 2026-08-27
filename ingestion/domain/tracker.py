@@ -1,9 +1,9 @@
 from collections import deque
 
-from ingestion.ports import IngestionTrackerPort
+from ingestion.domain import DuplicateTracker
 
 
-class IngestionTracker(IngestionTrackerPort):
+class InMemoryDuplicateTracker(DuplicateTracker):
 
     def __init__(self, max_size: int):
         self.deque = deque(maxlen=max_size)

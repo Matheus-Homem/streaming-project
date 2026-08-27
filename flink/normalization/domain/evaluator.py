@@ -5,11 +5,8 @@ from typing import Any
 
 import jmespath
 
-from flink.normalization.models import (
-    EventEvaluator,
-    FieldRule,
-    NormalizationContract,
-)
+from flink.normalization.domain import EventEvaluator
+from flink.normalization.models import FieldRule, NormalizationContract
 from shared.models import RawEvent
 
 

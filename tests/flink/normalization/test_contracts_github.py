@@ -4,13 +4,15 @@ from pathlib import Path
 from unittest import TestCase
 
 import flink.normalization
-from flink.normalization.adapters.contract_repository import YamlContractRepository
+from flink.normalization.domain.contract_repository import YamlContractRepository
 from flink.normalization.domain.evaluator import NormalizationRulesEventEvaluator
 from flink.normalization.domain.normalizer import EventNormalizer
 from shared.models import RawEvent
 from tests.fixtures.events import DOC_SHAPED_GITHUB_EVENTS, SAMPLE_SHAPED_GITHUB_EVENTS
 
-CONTRACTS_DIR = Path(flink.normalization.__file__).parent / "sources"
+CONTRACTS_DIR = (
+    Path(flink.normalization.__file__).parent.parent.parent / "interface" / "sources"
+)
 
 OBSERVED_AT = "2026-07-17T12:21:32+00:00"
 OBSERVED_AT_MILLIS = 1784290892000

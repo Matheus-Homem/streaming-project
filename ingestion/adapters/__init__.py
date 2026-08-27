@@ -1,11 +1,7 @@
-from ingestion.adapters.client import IngestionClient
-from ingestion.adapters.engine import IngestionEngine
-from ingestion.adapters.producer import IngestionProducer
-from ingestion.adapters.tracker import IngestionTracker
+from ingestion.adapters.client import RequestsClientAdapter
+from ingestion.adapters.producer import KafkaProducerAdapter
 
 __all__ = [
-    "IngestionClient",
-    "IngestionEngine",
-    "IngestionProducer",
-    "IngestionTracker",
+    "KafkaProducerAdapter",
+    "RequestsClientAdapter",
 ]

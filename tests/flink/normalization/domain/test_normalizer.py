@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 from unittest import TestCase
 from unittest.mock import Mock
 
+from flink.normalization.domain import ContractRepository, EventEvaluator
 from flink.normalization.domain.normalizer import EventNormalizer
-from flink.normalization.models import EventEvaluator, FieldRule, NormalizationContract
-from flink.normalization.ports import ContractRepositoryPort
+from flink.normalization.models import FieldRule, NormalizationContract
 from shared.models import RawEvent
 
 
@@ -12,7 +12,7 @@ class TestEventNormalizerNormalize(TestCase):
 
     def setUp(self):
         self.event_evaluator = Mock(spec=EventEvaluator)
-        self.contract_repository = Mock(spec=ContractRepositoryPort)
+        self.contract_repository = Mock(spec=ContractRepository)
         self.normalizer = EventNormalizer(
             event_evaluator=self.event_evaluator,
             contract_repository=self.contract_repository,

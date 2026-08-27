@@ -3,11 +3,11 @@ from pyflink.common import Row
 from pyflink.datastream.functions import FlatMapFunction, RuntimeContext
 
 from flink.normalization.domain.normalizer import EventNormalizer
-from flink.normalization.ports import NormalizationFlatMapFunctionPort
+from flink.normalization.ports import TransformerPort
 from shared.models import RawEvent
 
 
-class NormalizationFlatMapFunction(NormalizationFlatMapFunctionPort, FlatMapFunction):
+class FlinkTransformerAdapter(TransformerPort, FlatMapFunction):
 
     def __init__(self, normalizer: EventNormalizer):
         super().__init__(self.__class__.__name__)

@@ -1,0 +1,13 @@
+endpoints:
+  default: "https://api.github.com/events"
+  network: "https://api.github.com/networks/{owner}/{repo}/events"
+  organization: "https://api.github.com/orgs/{org}/events"
+headers:
+  rate_limit_remaining: "X-RateLimit-Remaining"
+  rate_limit_reset: "X-RateLimit-Reset"
+auth:
+  env_var: GITHUB_TOKEN
+  header: Authorization
+  value_template: "Bearer {token}"
+id_field: "id"
+type_field: "type"

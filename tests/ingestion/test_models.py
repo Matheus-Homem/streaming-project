@@ -3,13 +3,7 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
-from ingestion.models import (
-    AuthConfig,
-    EventModel,
-    SourceConfig,
-    SourceYamlEntry,
-    get_source_config,
-)
+from ingestion.models import AuthConfig, EventModel, SourceConfig, SourceYamlEntry
 
 
 class TestSourceYamlEntry(unittest.TestCase):
@@ -78,87 +72,6 @@ class TestEventModel(unittest.TestCase):
     def test_extra_fields_are_preserved(self):
         event = EventModel(id="1", type="PushEvent", actor={"login": "octocat"})
         self.assertEqual(event.model_dump()["actor"], {"login": "octocat"})
-
-
-class TestGetSourceConfig(unittest.TestCase):
-
-    def test_returns_config_for_github(self):
-        config = get_source_config("github")
-
-        self.assertEqual(config.source, "github")
-        self.assertEqual(config.endpoints["default"], "https://api.github.com/events")
-        self.assertEqual(config.id_field, "id")
-        self.assertEqual(config.type_field, "type")
-        self.assertEqual(config.auth.env_var, "GITHUB_TOKEN")
-        self.assertEqual(config.auth.header, "Authorization")
-        self.assertEqual(config.auth.value_template, "Bearer {token}")
-
-    def test_returns_config_for_gitlab(self):
-        config = get_source_config("gitlab")
-
-        self.assertEqual(config.endpoints["default"], "https://gitlab.com")
-        self.assertEqual(config.id_field, "id")
-        self.assertEqual(config.type_field, "object_kind")
-        self.assertIsNone(config.auth)
-
-    def test_raises_not_implemented_for_unknown_source(self):
-        with self.assertRaises(NotImplementedError):
-            get_source_config("bitbucket")
-
-    def test_config_is_immutable(self):
-        config = get_source_config("github")
-
-        with self.assertRaises(Exception):
-            config.url = "https://example.com"
-
-
-class TestSourceConfigUrlResolution(unittest.TestCase):
-
-    def _url(self, endpoint=None, endpoint_params=None):
-        return get_source_config("github", endpoint, endpoint_params).url
-
-    def test_omitted_endpoint_falls_back_to_default_variant(self):
-        config = get_source_config("github")
-
-        self.assertEqual(config.variant, "default")
-        self.assertEqual(config.url, "https://api.github.com/events")
-
-    def test_explicit_default_endpoint_returns_events_url(self):
-        self.assertEqual(self._url("default"), "https://api.github.com/events")
-
-    def test_network_endpoint_with_owner_and_repo(self):
-        self.assertEqual(
-            self._url("network", {"owner": "kubernetes", "repo": "kubernetes"}),
-            "https://api.github.com/networks/kubernetes/kubernetes/events",
-        )
-
-    def test_organization_endpoint_with_org(self):
-        self.assertEqual(
-            self._url("organization", {"org": "anthropics"}),
-            "https://api.github.com/orgs/anthropics/events",
-        )
-
-    def test_unknown_endpoint_variant_raises_value_error(self):
-        with self.assertRaises(ValueError) as context:
-            self._url("does-not-exist")
-
-        self.assertIn("Unsupported endpoint", str(context.exception))
-
-    def test_missing_endpoint_param_raises_value_error(self):
-        with self.assertRaises(ValueError) as context:
-            self._url("network", {"owner": "kubernetes"})
-
-        self.assertIn("repo", str(context.exception))
-
-    def test_no_endpoint_params_for_parameterized_variant_raises_value_error(self):
-        with self.assertRaises(ValueError):
-            self._url("organization")
-
-    def test_extra_endpoint_params_are_ignored(self):
-        self.assertEqual(
-            self._url("organization", {"org": "anthropics", "owner": "unused"}),
-            "https://api.github.com/orgs/anthropics/events",
-        )
 
 
 class TestSourceConfigAccessors(unittest.TestCase):

@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 from kafka.errors import KafkaError
 
-from ingestion.adapters.producer import IngestionProducer, JsonSerializer
+from ingestion.adapters.producer import JsonSerializer, KafkaProducerAdapter
 from shared.models import RawEvent
 
 
@@ -36,7 +36,7 @@ class TestJsonSerializer(unittest.TestCase):
             self.serializer.serialize("any-topic", non_serializable_value)
 
 
-class TestIngestionProducer(unittest.TestCase):
+class TestKafkaProducerAdapter(unittest.TestCase):
 
     def setUp(self):
         patcher = patch("ingestion.adapters.producer.KafkaProducer")
@@ -47,7 +47,7 @@ class TestIngestionProducer(unittest.TestCase):
         self.kafka_producer_cls_mock.return_value = self.producer_instance_mock
 
     def test_init_uses_explicit_bootstrap_servers(self):
-        producer = IngestionProducer(
+        producer = KafkaProducerAdapter(
             bootstrap_servers=["broker:9092"],
             topic="events-raw",
         )
@@ -58,7 +58,7 @@ class TestIngestionProducer(unittest.TestCase):
         self.assertEqual(kwargs["bootstrap_servers"], ["broker:9092"])
 
     def test_publish_sends_all_events_and_flushes(self):
-        producer = IngestionProducer(
+        producer = KafkaProducerAdapter(
             bootstrap_servers=["broker:9092"],
             topic="events-raw",
         )
@@ -71,7 +71,7 @@ class TestIngestionProducer(unittest.TestCase):
         self.producer_instance_mock.flush.assert_called_once()
 
     def test_publish_raises_on_kafka_error(self):
-        producer = IngestionProducer(
+        producer = KafkaProducerAdapter(
             bootstrap_servers=["broker:9092"],
             topic="events-raw",
         )

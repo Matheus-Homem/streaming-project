@@ -1,0 +1,9 @@
+endpoints:
+  default: "https://gitlab.com"
+  network: "https://gitlab.com{owner}/{repo}/events"
+  organization: "https://gitlab.com/{org}/events"
+headers:
+  rate_limit_remaining: "RateLimit-Remaining"
+  rate_limit_reset: "RateLimit-Reset"
+id_field: "id"
+type_field: "object_kind"

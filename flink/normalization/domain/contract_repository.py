@@ -3,11 +3,11 @@ from pathlib import Path
 
 import yaml
 
+from flink.normalization.domain import ContractRepository
 from flink.normalization.models import NormalizationContract
-from flink.normalization.ports import ContractRepositoryPort
 
 
-class YamlContractRepository(ContractRepositoryPort):
+class YamlContractRepository(ContractRepository):
 
     def __init__(self, contracts_dir: Path):
         self.logger = getLogger(self.__class__.__name__)
@@ -20,7 +20,7 @@ class YamlContractRepository(ContractRepositoryPort):
         return self._cache[source]
 
     def _load(self, source: str) -> NormalizationContract:
-        path = self._contracts_dir / f"{source}.yml"
+        path = self._contracts_dir / source / "normalization.yml"
         self.logger.info(f"Loading contract for source={source} from {path}")
         try:
             with path.open() as file:

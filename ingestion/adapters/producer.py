@@ -5,7 +5,7 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from kafka.serializer import Serializer
 
-from ingestion.ports import IngestionProducerPort
+from ingestion.ports import EventProducerPort
 from shared.models import RawEvent
 
 
@@ -14,7 +14,7 @@ class JsonSerializer(Serializer):
         return json.dumps(value).encode("utf-8")
 
 
-class IngestionProducer(IngestionProducerPort):
+class KafkaProducerAdapter(EventProducerPort):
 
     def __init__(
         self,

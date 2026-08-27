@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 from pyflink.common import Row
 
-from flink.normalization.adapters.function import NormalizationFlatMapFunction
+from flink.normalization.adapters.transformer import FlinkTransformerAdapter
 from flink.normalization.domain.normalizer import EventNormalizer
 from shared.models import RawEvent
 
@@ -18,11 +18,11 @@ VALID_RAW_EVENT_JSON = RawEvent(
 ).model_dump_json()
 
 
-class TestNormalizationFlatMapFunctionFlatMap(TestCase):
+class TestFlinkTransformerAdapterFlatMap(TestCase):
 
     def setUp(self):
         self.normalizer = Mock(spec=EventNormalizer)
-        self.function = NormalizationFlatMapFunction(normalizer=self.normalizer)
+        self.function = FlinkTransformerAdapter(normalizer=self.normalizer)
 
     def test_can_yield_the_normalized_event_as_a_key_value_row(self):
         normalized_event = Mock()

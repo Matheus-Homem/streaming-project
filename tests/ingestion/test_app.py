@@ -1,22 +1,21 @@
 import argparse
-import os
 import unittest
 from datetime import datetime
 from unittest.mock import Mock, patch
 
-from ingestion.adapters import (
-    IngestionClient,
-    IngestionEngine,
-    IngestionProducer,
-)
+from ingestion.adapters import KafkaProducerAdapter, RequestsClientAdapter
 from ingestion.app import (
+    SOURCES_DIR,
     build_arguments,
     configure_ingestion_pipeline,
     main,
     parse_endpoint_params,
 )
-from ingestion.models import get_source_config
+from ingestion.domain.formatter import ValidatingRawEventFormatter
+from ingestion.domain.source_config_repository import YamlSourceConfigRepository
 from ingestion.utils import RateLimitError
+
+source_config_repository = YamlSourceConfigRepository(sources_dir=SOURCES_DIR)
 
 
 def _args(**overrides):
@@ -97,16 +96,16 @@ class TestParseEndpointParams(unittest.TestCase):
 class TestConfigureIngestionPipeline(unittest.TestCase):
 
     def test_builds_pipeline_from_source_config(self):
-        source_config = get_source_config("github")
+        source_config = source_config_repository.get("github")
 
         pipeline = configure_ingestion_pipeline(source_config, ["broker:9092"])
 
-        self.assertIsInstance(pipeline.client, IngestionClient)
-        self.assertIsInstance(pipeline.engine, IngestionEngine)
-        self.assertIsInstance(pipeline.producer, IngestionProducer)
+        self.assertIsInstance(pipeline.client, RequestsClientAdapter)
+        self.assertIsInstance(pipeline.engine, ValidatingRawEventFormatter)
+        self.assertIsInstance(pipeline.producer, KafkaProducerAdapter)
 
     def test_client_and_engine_share_the_same_config(self):
-        source_config = get_source_config(
+        source_config = source_config_repository.get(
             "github", "organization", {"org": "anthropics"}
         )
 
@@ -120,186 +119,66 @@ class TestConfigureIngestionPipeline(unittest.TestCase):
 
 
 class TestMain(unittest.TestCase):
+    """main() now only orchestrates the polling loop from already-resolved
+    arguments; resolving them (env var, CLI args, source config) is the
+    __main__ block's job, covered by TestBuildArguments, TestParseEndpointParams
+    and TestConfigureIngestionPipeline instead.
+    """
 
-    @patch.dict(os.environ, {}, clear=True)
-    @patch("ingestion.app.RetryTimer")
+    def setUp(self):
+        self.source_config = Mock()
+        self.source_config.variant = "github"
+        self.source_config.url = "https://api.github.com/events"
+        self.timer = Mock()
+
     @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_raises_key_error_when_bootstrap_servers_env_var_is_missing(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        with self.assertRaises(KeyError):
-            main()
-
-        mock_build_arguments.assert_not_called()
-        mock_configure_pipeline.assert_not_called()
-
-    @patch.dict(
-        os.environ, {"KAFKA_BOOTSTRAP_SERVERS": "broker-1:19092,broker-2:19092"}
-    )
-    @patch("ingestion.app.RetryTimer")
-    @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_splits_bootstrap_servers_env_var_and_passes_it_to_the_pipeline(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        mock_build_arguments.return_value = _args()
-        pipeline = Mock()
-        pipeline.execute.side_effect = KeyboardInterrupt()
-        mock_configure_pipeline.return_value = pipeline
-        mock_retry_timer.return_value = Mock()
-
-        with self.assertRaises(KeyboardInterrupt):
-            main()
-
-        bootstrap_servers = mock_configure_pipeline.call_args.args[1]
-        self.assertEqual(bootstrap_servers, ["broker-1:19092", "broker-2:19092"])
-
-    @patch("ingestion.app.RetryTimer")
-    @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_first_iteration_success_path(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        mock_build_arguments.return_value = _args()
+    def test_first_iteration_success_path(self, mock_configure_pipeline):
         pipeline = Mock()
         pipeline.execute.return_value = None
         mock_configure_pipeline.return_value = pipeline
-        timer = Mock()
-        timer.reset.return_value = timer
-        timer.sleep.side_effect = KeyboardInterrupt()
-        mock_retry_timer.return_value = timer
+        self.timer.reset.return_value = self.timer
+        self.timer.sleep.side_effect = KeyboardInterrupt()
 
         with self.assertRaises(KeyboardInterrupt):
-            main()
+            main(["broker:9092"], self.timer, self.source_config)
 
+        mock_configure_pipeline.assert_called_once_with(
+            self.source_config, ["broker:9092"]
+        )
         pipeline.execute.assert_called_once()
-        timer.reset.assert_called_once()
-        timer.sleep.assert_called_once()
+        self.timer.reset.assert_called_once()
+        self.timer.sleep.assert_called_once()
 
-    @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_resolved_config_is_passed_to_the_pipeline(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        mock_build_arguments.return_value = _args(
-            endpoint="network", param=["owner=kubernetes", "repo=kubernetes"]
-        )
-        pipeline = Mock()
-        pipeline.execute.side_effect = KeyboardInterrupt()
-        mock_configure_pipeline.return_value = pipeline
-        mock_retry_timer.return_value = Mock()
-
-        with self.assertRaises(KeyboardInterrupt):
-            main()
-
-        source_config = mock_configure_pipeline.call_args.args[0]
-        self.assertEqual(source_config.source, "github")
-        self.assertEqual(source_config.variant, "network")
-        self.assertEqual(
-            source_config.url,
-            "https://api.github.com/networks/kubernetes/kubernetes/events",
-        )
-
-    @patch("ingestion.app.RetryTimer")
-    @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_unknown_source_fails_before_the_polling_loop(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        mock_build_arguments.return_value = _args(source="bitbucket")
-        mock_retry_timer.return_value = Mock()
-
-        with self.assertRaises(NotImplementedError):
-            main()
-
-        mock_configure_pipeline.assert_not_called()
-
-    @patch("ingestion.app.RetryTimer")
-    @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_missing_endpoint_param_fails_before_the_polling_loop(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        mock_build_arguments.return_value = _args(
-            endpoint="network", param=["owner=kubernetes"]
-        )
-        mock_retry_timer.return_value = Mock()
-
-        with self.assertRaises(ValueError):
-            main()
-
-        mock_configure_pipeline.assert_not_called()
-
-    @patch("ingestion.app.RetryTimer")
-    @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_exception_path_increases_backoff(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        mock_build_arguments.return_value = _args()
+    def test_exception_path_increases_backoff(self, mock_configure_pipeline):
         pipeline = Mock()
         pipeline.execute.side_effect = Exception("boom")
         mock_configure_pipeline.return_value = pipeline
-        timer = Mock()
-        timer.sleep.return_value = timer
-        timer.increase.side_effect = KeyboardInterrupt()
-        mock_retry_timer.return_value = timer
+        self.timer.sleep.return_value = self.timer
+        self.timer.increase.side_effect = KeyboardInterrupt()
 
         with self.assertRaises(KeyboardInterrupt):
-            main()
+            main(["broker:9092"], self.timer, self.source_config)
 
         pipeline.execute.assert_called_once()
-        timer.sleep.assert_called_once()
-        timer.increase.assert_called_once()
+        self.timer.sleep.assert_called_once()
+        self.timer.increase.assert_called_once()
 
-    @patch("ingestion.app.RetryTimer")
     @patch("ingestion.app.configure_ingestion_pipeline")
-    @patch("ingestion.app.build_arguments")
-    def test_rate_limit_error_path(
-        self,
-        mock_build_arguments,
-        mock_configure_pipeline,
-        mock_retry_timer,
-    ):
-        mock_build_arguments.return_value = _args()
+    def test_rate_limit_error_path(self, mock_configure_pipeline):
         pipeline = Mock()
         reset_at = datetime(2028, 8, 7, 13, 48, 0)
         pipeline.execute.side_effect = RateLimitError(reset_at=reset_at)
         mock_configure_pipeline.return_value = pipeline
-        timer = Mock()
-        timer.schedule_sleep.return_value = timer
-        timer.reset.side_effect = KeyboardInterrupt()
-        mock_retry_timer.return_value = timer
+        self.timer.schedule_sleep.return_value = self.timer
+        self.timer.reset.side_effect = KeyboardInterrupt()
 
         with self.assertRaises(KeyboardInterrupt):
-            main()
+            main(["broker:9092"], self.timer, self.source_config)
 
         pipeline.execute.assert_called_once()
-        timer.schedule_sleep.assert_called_once_with(reset_at)
-        timer.reset.assert_called_once()
+        self.timer.schedule_sleep.assert_called_once_with(reset_at)
+        self.timer.reset.assert_called_once()
 
 
 if __name__ == "__main__":
