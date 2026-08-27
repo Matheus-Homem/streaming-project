@@ -5,7 +5,7 @@ path: "**/*.py"
 
 ## Code conventions already in place
 
-- Abstract base classes + constructor injection for testability (`IngestionClientBase`, `IngestionEngineBase`, `IngestionProducerBase`, `IngestionTrackerBase` - see `ingestion/ports.py`) - follow this shape for new components instead of hard-wiring dependencies.
+- Abstract base classes + constructor injection for testability (`EventClientPort`/`EventProducerPort` in `ingestion/ports.py`; `SourceConfigRepository`/`RawEventFormatter`/`DuplicateTracker` in `ingestion/domain/__init__.py`; `TransformerPort` in `flink/normalization/ports.py`; `ContractRepository`/`EventEvaluator` in `flink/normalization/domain/__init__.py`) - follow this shape for new components instead of hard-wiring dependencies.
 - Pydantic models for anything crossing a boundary (`EventModel`/`SourceConfig` in `ingestion/models.py`, `RawEvent` in `shared/models.py`).
 - One logger per class via `getLogger(self.__class__.__name__)` (see `shared/logger.py`) - never the bare root `logging` module.
 - Tests are `unittest.TestCase` + `unittest.mock`, one file per source module, named `test_<module>.py` under a mirrored path in `tests/`.
