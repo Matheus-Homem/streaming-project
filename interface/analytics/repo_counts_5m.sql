@@ -21,7 +21,7 @@ CREATE TABLE aggregated_event (
     event_count BIGINT
 ) WITH (
     'connector' = 'kafka',
-    'topic' = 'events-aggregated',
+    'topic' = 'events-analytics',
     'properties.bootstrap.servers' = 'broker-1:19092,broker-2:19092,broker-3:19092',
     'key.fields' = 'repo_name',
     'key.format' = 'json',
