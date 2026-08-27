@@ -26,7 +26,7 @@ is that nothing compiles *to* the SQL - it is authored directly.
 | Distinct-actor count per repo/window | Different aggregation class (`COUNT(DISTINCT entity_id)`, larger state) - future increment |
 | Global event count (unkeyed, no `repo_name`) | Not selected as P1 metric - future increment |
 | OpenSearch / Grafana consumption of `events-analytics` | Separate planned stage per `CLAUDE.md`'s Architecture section - own feature |
-| DDL for `events-normalized` derived from `flink/normalization/sources/github.yml` | `PLATFORM.md`'s "Aggregation is SQL" section leaves this as a per-feature call; P1's query only touches envelope fields, so a hand-written `CREATE TABLE` is enough - revisit if a future query needs `event_types` columns |
+| DDL for `events-normalized` derived from `interface/sources/github/normalization.yml` | `PLATFORM.md`'s "Aggregation is SQL" section leaves this as a per-feature call; P1's query only touches envelope fields, so a hand-written `CREATE TABLE` is enough - revisit if a future query needs `event_types` columns |
 | Sliding/hopping windows, side-output for late data | P1 uses tumbling windows with late data dropped (see Assumptions) |
 | A generalized "add a new aggregation query" mechanism | Each aggregation query is its own `.sql` file / job per `AD-009`; no framework for registering new ones is built here |
 
