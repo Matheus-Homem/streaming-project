@@ -1,6 +1,6 @@
 # GitHub Events API - fields used by the pipeline
 
-This is a **curated** summary, not the full official GitHub Events API schema. It covers only the fields `ingestion/` and `flink/normalization/` actually consume today, extracted from real events pulled from the public API and from the contract `flink/normalization/config/sources/github.yml`. Those events are inlined in `tests/fixtures/events.py` (`GITHUB_EVENT` and `SAMPLE_SHAPED_GITHUB_EVENTS`) - the raw capture file they came from is a local artifact and never enters the repo (`.gitignore`'s `*_sample.*`). If a new field is needed, check its real shape there (or in GitHub's official docs) instead of assuming - the API has many more fields than the ones listed here.
+This is a **curated** summary, not the full official GitHub Events API schema. It covers only the fields `ingestion/` and `flink/normalization/` actually consume today, extracted from real events pulled from the public API and from the contract `interface/sources/github/normalization.yml`. Those events are inlined in `tests/fixtures/events.py` (`GITHUB_EVENT` and `SAMPLE_SHAPED_GITHUB_EVENTS`) - the raw capture file they came from is a local artifact and never enters the repo (`.gitignore`'s `*_sample.*`). If a new field is needed, check its real shape there (or in GitHub's official docs) instead of assuming - the API has many more fields than the ones listed here.
 
 Event types backed by a real captured event: `IssueCommentEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`, `PullRequestEvent`. `WatchEvent` is declared in `github.yml` but has no captured instance - the shape below is the one GitHub documents officially, not verified locally.
 
@@ -42,4 +42,4 @@ payload.action                      string  - typically "started" (starring a re
 
 ## `PullRequestEvent`, `PullRequestReviewEvent`, `PullRequestReviewCommentEvent`
 
-All three are captured in `tests/fixtures/events.py` (`SAMPLE_SHAPED_GITHUB_EVENTS`) and consumed by `flink/normalization/config/sources/github.yml`. When changing one of these mappings, inspect the real shape in that fixture - do not assume symmetry with `IssueCommentEvent`.
+All three are captured in `tests/fixtures/events.py` (`SAMPLE_SHAPED_GITHUB_EVENTS`) and consumed by `interface/sources/github/normalization.yml`. When changing one of these mappings, inspect the real shape in that fixture - do not assume symmetry with `IssueCommentEvent`.

@@ -6,7 +6,7 @@ REPLICATION_FACTOR="${REPLICATION_FACTOR:-3}"
 TOPICS=(
     "events-raw"
     "events-normalized"
-    "events-aggregated"
+    "events-analytics"
 )
 
 for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do

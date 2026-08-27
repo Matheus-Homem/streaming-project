@@ -17,7 +17,7 @@
 | ------- | ------ |
 | Aggregation / windowing over `events-normalized` | Separate future feature; this feature only produces the normalized stream it will consume |
 | OpenSearch + Grafana | Separate future feature; unaffected by this one |
-| GitLab ingestion wiring | Still a stub (a `gitlab` entry in `ingestion/config/sources.yml`, no client/engine run exercised); unaffected here |
+| GitLab ingestion wiring | Still a stub (a `gitlab` entry under `interface/sources/`, no client/engine run exercised); unaffected here |
 | Non-VCS API sources (weather, financial/monetary, etc.) | `AD-004`/`AD-006` (`.specs/STATE.md`) record the architectural intent to stay pluggable for this, but no additional source is declared in this feature - GitHub is the only normalization contract authored now. Under `AD-006` adding one is a YAML file, not a code change |
 | Flink job resilience / checkpointing hardening (restart strategies, exactly-once tuning) | Mirrors how `streaming-ingestion`'s resilience work was its own P2 after the initial P1; deferred to a future feature once the job exists to harden |
 | Kubernetes / Drone / Terraform | RFC marks these "if there's an opportunity" - not tied to this feature. `AD-005` (`.specs/STATE.md`) records the concrete trigger conditions identified for each (K8s: local stack outgrowing Compose orchestration - plausible once this feature and OpenSearch/Grafana land; Terraform: only if the project provisions real AWS free-tier resources) and reserves `infra/k8s/`/`infra/terraform/` as their landing paths, but neither is adopted by this feature |
@@ -36,7 +36,7 @@
 | Normalization depth | Full per-event-type flattening with a curated subset per nested object (not full recursive flatten, not envelope-only) | User's explicit choice - more thorough than MVP-minimal, but noise fields (`avatar_url`, `gravatar_id`, redundant `*_url`) are dropped | y |
 | Timestamp representation | `event_time`/`ingested_at` as epoch milliseconds in the normalized schema | Flink event-time/watermarks work natively with epoch millis; resolves this before the next feature (windowed aggregation) needs it | y |
 | Partition key | `partition_key` = `repo_name` | Resolves the message-key item `streaming-ingestion/spec.md` explicitly deferred "before Flink windowing... relies on ordering per key" | y |
-| Normalizer architecture | **Revised 2026-08-17 (`AD-006`)**: contract-driven. A single source-agnostic `NormalizationEngine` interprets a YAML contract per source; the `Normalizer` port (ABC) is retained as the escape hatch for a source too irregular for a contract. Normalized schema still splits into a domain-neutral envelope + a source-specific fields block | Driven by the user's long-term API-agnostic-platform intent. `AD-004` set the pluggability principle; `AD-006` sets the authoring medium - users declare sources in data, never in Python. See `.specs/PLATFORM.md` | y |
+| Normalizer architecture | Contract-driven (`AD-006`): a single source-agnostic `EventNormalizer` interprets a YAML contract per source; a port/ABC is retained as the escape hatch for a source too irregular for a contract. Normalized schema splits into a domain-neutral envelope + a source-specific fields block | Driven by the user's long-term API-agnostic-platform intent. `AD-004` set the pluggability principle; `AD-006` sets the authoring medium - users declare sources in data, never in Python. See `.specs/PLATFORM.md` | y |
 | Field-naming convention for the GitHub-specific block | No per-field source prefix (e.g. `repo_id`, not `github_repo_id`); the block as a whole is understood as GitHub-specific because only one source exists today | Simplicity over speculative collision-avoidance; revisit if/when a second real source shares the topic | n |
 | Fallback for the 6 not-yet-mapped event types | Envelope populated, GitHub-specific fields block empty/null; event still published, not dropped | Avoids silent data loss while mapping coverage is incomplete, matching the "don't lose data" bias already in `ingestion/adapters/engine.py` | n |
 | Malformed message / unknown `schema_version` handling | Log and skip, job keeps running | Mirrors `ingestion/adapters/engine.py`'s existing pattern for payloads that fail validation | n |
@@ -92,12 +92,12 @@
 **Acceptance Criteria**:
 
 1. WHEN a message on `events-raw` has `source=github` and a `source_event_type` matching one of the 11 types in the Normalization Mapping table below THEN the job SHALL publish to `events-normalized` a normalized event containing the Domain-Neutral Envelope fields plus exactly the Curated Fields listed for that type.
-2. The Domain-Neutral Envelope SHALL always include `source`, `event_id`, `event_type`, `entity_id`, `entity_name`, `event_time`, `ingested_at`, `schema_version`, and `partition_key`. **Revised 2026-08-19**: the original wording named these `actor_id`/`actor_login`, which read as GitHub/VCS-specific vocabulary sitting on the domain-neutral envelope. Renamed to `entity_id`/`entity_name` to keep the envelope meaningful for a future non-actor source (e.g. a financial feed keyed by an account, not a person/bot) - the values are unchanged (still `actor.id`/`actor.login` for GitHub), only the envelope's field names generalized.
+2. The Domain-Neutral Envelope SHALL always include `source`, `event_id`, `event_type`, `entity_id`, `entity_name`, `event_time`, `ingested_at`, `schema_version`, and `partition_key`. `entity_id`/`entity_name` are deliberately generic (not `actor_id`/`actor_login`) so the envelope stays meaningful for a future non-actor source (e.g. a financial feed keyed by an account, not a person/bot) - for GitHub the values are `actor.id`/`actor.login`.
 3. WHERE the source event is GitHub THEN `partition_key` SHALL be set to the event's `repo_name`.
 4. `event_time` (from the source `created_at`) and `ingested_at` (from the source `observed_at`) SHALL be epoch-millisecond integers, converted from the source `RawEvent`'s ISO 8601 strings.
 5. IF a message's `source_event_type` is one of the 6 types not yet in the Normalization Mapping table (`PushEvent`, `ForkEvent`, `ReleaseEvent`, `DiscussionEvent`, `CommitCommentEvent`, `SponsorshipEvent`) THEN the job SHALL still publish a normalized event with the Domain-Neutral Envelope populated and the GitHub-specific fields block empty/null, rather than dropping the event.
 6. IF a message fails to deserialize as valid JSON, is missing a required envelope field, or has a `schema_version` other than `1` THEN the job SHALL log the failure (including `event_id` when parseable) and skip that message without stopping the job.
-7. The job SHALL reach all GitHub-specific field extraction through the `NormalizationEngineBase` port, satisfied by the single source-agnostic `NormalizationEngine` reading a per-source declarative contract - the job's core pipeline SHALL NOT contain GitHub-specific branching itself (`AD-004`). **Revised 2026-08-19**: the original wording named `GitHubNormalizer` as the sole concrete implementation, which `AD-006` superseded - GitHub knowledge now lives entirely in `flink/normalization/config/sources/github.yml`, and no GitHub-named Python class exists. The requirement (no source-specific branching in the pipeline) is unchanged and is enforced by a test asserting the module contains no GitHub vocabulary. Current file-by-file mapping (relocated more than once since): `design.md`'s naming-drift table.
+7. The job SHALL reach all GitHub-specific field extraction through a source-agnostic `EventNormalizer`/`EventEvaluator` (`flink/normalization/domain/`) reading a per-source declarative contract - the job's core pipeline SHALL NOT contain GitHub-specific branching itself (`AD-004`, `AD-006`). GitHub knowledge lives entirely in `interface/sources/github/normalization.yml`; no GitHub-named Python class exists. Enforced by a test asserting the module contains no GitHub vocabulary.
 
 **Independent Test**: Feed each of the 11 mapped event types (from `tests/fixtures/events.py`'s `SAMPLE_SHAPED_GITHUB_EVENTS` where real captured traffic exists, its hand-built `DOC_SHAPED_GITHUB_EVENTS` otherwise) through the job and confirm the published `events-normalized` message matches its table row exactly; feed one of the 6 unmapped types and confirm it publishes with an empty GitHub-specific block instead of being dropped; feed a malformed message and confirm it's logged and skipped without crashing the job.
 
@@ -105,13 +105,11 @@
 
 ### Normalization Mapping (referenced by P1: GitHub event normalization, AC1)
 
-> **Path notation (revised 2026-08-17, `AD-006`).** Sources below are written as the paths a
-> normalization contract declares, evaluated against `RawEvent.payload` - which holds the whole source
-> event dict. So `actor`, `repo`, `org`, `created_at`, and `public` sit at the root, while GitHub's own
-> nested payload object is reached as `payload.<...>`. The earlier `GitHubEvent.x` notation referred to
-> a Pydantic class removed by `refactor/yaml-driven-source-config` (PR #5); the *shape* is unchanged,
-> only the notation. Fields sourced from the pipeline envelope rather than the payload are marked
-> `RawEvent.x` and are populated by the normalizer itself, not by a contract rule.
+> **Path notation.** Sources below are written as the paths a normalization contract declares,
+> evaluated against `RawEvent.payload` - which holds the whole source event dict. So `actor`, `repo`,
+> `org`, `created_at`, and `public` sit at the root, while GitHub's own nested payload object is
+> reached as `payload.<...>`. Fields sourced from the pipeline envelope rather than the payload are
+> marked `RawEvent.x` and are populated by the normalizer itself, not by a contract rule.
 
 **Domain-Neutral Envelope** (every normalized event, regardless of source):
 
@@ -172,7 +170,7 @@
 
 **Independent Test**: For each of the 6 types, feed a captured real sample through the updated job and confirm the published `events-normalized` message has populated (non-null) GitHub-specific fields instead of falling into the empty-fallback path.
 
-**Closed 2026-08-24, all 6 types deferred to the AC4 escape valve (explicit user decision)**: `tmp/capture_extended_events.py` polled the public GitHub Events API for ~18 minutes looking for one instance of each of the 6 types. It was stopped deliberately before finding any (cost of continued polling judged not worth it against how rare some of these types are on the public feed) - zero real samples were captured in the observation window. Rather than fabricate contract entries from documentation (the same failure mode P2 exists to avoid - `PushEvent`'s doc coverage already proved incomplete during Specify), the user chose to extend AC4's escape valve - originally scoped to `SponsorshipEvent` alone - to all 6 types. None of the 6 gained a contract entry; all stay on the P1 AC5 empty-fallback path (envelope + common populated, GitHub-specific block empty), which is already tested and proven live (T19's smoke test). This is a documented, deliberate scope reduction, not an unnoticed gap.
+**Resolution**: real-traffic capture (`tmp/capture_extended_events.py`) yielded zero samples for any of the 6 types within the observation window - rare enough on the public feed that continued polling wasn't worth it. Rather than fabricate contract entries from documentation (the failure mode this story exists to avoid), the user extended AC4's escape valve from `SponsorshipEvent` alone to all 6 types: none of them gained a contract entry, and all stay on the P1 AC5 empty-fallback path (envelope + common populated, GitHub-specific block empty) - a documented, deliberate scope reduction, not an unnoticed gap. See `.specs/STATE.md` for the full record.
 
 ---
 
@@ -183,7 +181,7 @@
 - IF a message is not valid JSON THEN the job SHALL log and skip it (covered, same AC6)
 - IF `org` is absent from the payload (private profile or org-less actor) THEN `org_id`/`org_login` SHALL be null in the normalized event, not omitted or fatal (covered, GitHub-specific fields block table)
 - IF an event's `source_event_type` isn't yet in the Normalization Mapping table THEN the event SHALL still publish with an empty GitHub-specific block, not be dropped (covered, P1 Normalization AC5)
-- IF `SponsorshipEvent` traffic never appears during the P2 sample-capture window THEN it MAY stay on the empty-fallback path indefinitely, explicitly documented as a known gap (covered, P2 AC4) - **2026-08-24: extended to all 6 P2 types by explicit user decision, see P2's closing note above**
+- IF real-traffic capture never yields a sample for a given P2 event type THEN it stays on the empty-fallback path indefinitely, explicitly documented as a known gap (covered, P2 AC4 - by explicit user decision this now applies to all 6 P2 types, not just `SponsorshipEvent`, see P2's Resolution above)
 
 ---
 
@@ -191,28 +189,28 @@
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| FLK-01 | P1: Local stack infrastructure (topic provisioning) | T1/T2 | Verified - both topics live-verified in T19 (3 partitions each, replication/retention checked in T1/T2) |
-| FLK-02 | P1: Local stack infrastructure (ingestion container) | T3/T4 | Verified - container starts and polls unattended (T19); real end-to-end traffic blocked by a GitHub rate limit during that run, substituted with hand-produced messages - known non-blocking `streaming-ingestion` P2 gap, not a regression here |
+| FLK-01 | P1: Local stack infrastructure (topic provisioning) | T1/T2 | Verified - both topics live-verified (3 partitions each, replication/retention as specified) |
+| FLK-02 | P1: Local stack infrastructure (ingestion container) | T3/T4 | Verified - container starts and polls unattended |
 | FLK-03 | P1: Local stack infrastructure (manual ingestion path retained) | T3/T4 | Verified - unaffected by containerization |
-| FLK-04 | P1: Local stack infrastructure (Flink cluster) | T17/T18 | Verified - real `flink:2.3.0-scala_2.12-java17` image + Kafka connector JAR, job/task manager services in `docker-compose.yml`, running live in T19 |
-| FLK-05 | P1: Local stack infrastructure (startup ordering) | T18 | Verified - `depends_on: topic-init: condition: service_completed_successfully`, live in T19 |
-| FLK-06 | P1: GitHub event normalization (11-type mapping) | T12-T14 | Verified - all 11 P1 event types declared in `flink/normalization/sources/github.yml`, field-by-field tested in `tests/flink/normalization/test_contracts_github.py` |
+| FLK-04 | P1: Local stack infrastructure (Flink cluster) | T17/T18 | Verified - real `flink:2.3.0-scala_2.12-java17` image + Kafka connector JAR, job/task manager services in `docker-compose.yml`, running live |
+| FLK-05 | P1: Local stack infrastructure (startup ordering) | T18 | Verified - `depends_on: topic-init: condition: service_completed_successfully` |
+| FLK-06 | P1: GitHub event normalization (11-type mapping) | T12-T14 | Verified - all 11 P1 event types declared in `interface/sources/github/normalization.yml`, field-by-field tested in `tests/flink/normalization/test_contracts_github.py` |
 | FLK-07 | P1: GitHub event normalization (envelope fields) | T11/T12 | Verified - `entity_id`/`entity_name`/`event_time` envelope, tested and live-verified |
-| FLK-08 | P1: GitHub event normalization (partition key) | T16 | Implemented, not fully Verified - sink key bug fixed 2026-08-24 (`JsonFieldSerializationSchema`, unit-tested); the live check that the physical Kafka record key (not just the JSON payload's `partition_key` field) is set still needs a T19 re-run against the fixed sink |
-| FLK-09 | P1: GitHub event normalization (timestamp conversion) | T12 | Verified - `event_time`/`ingested_at` via `to_millis`, live-verified in T19 |
-| FLK-10 | P1: GitHub event normalization (unmapped-type fallback) | T11 | Verified - AC5 fallback live-verified in T19 (undeclared `PushEvent` kept envelope+common, empty per-type block) |
-| FLK-11 | P1: GitHub event normalization (malformed-message handling) | T15 | Implemented, not fully Verified - malformed JSON and a missing envelope field are handled and logged; `schema_version != 1` is not yet rejected (`shared.models.RawEvent.schema_version` has no `== 1` constraint) - open sub-case, see T15 |
-| FLK-12 | P1: GitHub event normalization (pluggable Normalizer architecture) | `flink/normalization/domain/evaluator.py`, `flink/normalization/domain/utils.py`, `flink/normalization/use_case.py`, `flink/normalization/sources/github.yml` | Implemented - contract-driven per `AD-006`; all 11 P1 event types declared. **Revised 2026-08-19**: relocated from `adapters/engine.py`/`adapters/evaluator.py` to the `domain/`+`use_case.py` split (see `design.md`'s naming-drift table); `tests/flink/normalization/test_contracts_github.py` and friends updated to match. Live-verified end-to-end in T19 |
-| FLK-13 | P2: Coverage extension (sample capture) | T20 | Verified - attempted (`tmp/capture_extended_events.py`), zero types captured within the observation window; not retried, see P2's closing note |
+| FLK-08 | P1: GitHub event normalization (partition key) | T16 | Verified - `FlinkTransformerAdapter` sets the Kafka record key to `partition_key`, unit-tested (`tests/flink/common/adapters/test_sink.py`) |
+| FLK-09 | P1: GitHub event normalization (timestamp conversion) | T12 | Verified - `event_time`/`ingested_at` via `to_millis`, live-verified |
+| FLK-10 | P1: GitHub event normalization (unmapped-type fallback) | T11 | Verified - AC5 fallback live-verified (undeclared `PushEvent` kept envelope+common, empty per-type block) |
+| FLK-11 | P1: GitHub event normalization (malformed-message handling) | T15 | Implemented, not fully Verified - malformed JSON and a missing envelope field are handled and logged; `schema_version != 1` is not yet rejected (`shared.models.RawEvent.schema_version` has no `== 1` constraint) - open sub-case |
+| FLK-12 | P1: GitHub event normalization (pluggable Normalizer architecture) | `flink/normalization/domain/{evaluator,normalizer,utils}.py`, `interface/sources/github/normalization.yml` | Verified - contract-driven per `AD-006`; all 11 P1 event types declared; no GitHub-named Python class exists |
+| FLK-13 | P2: Coverage extension (sample capture) | T20 | Verified - attempted (`tmp/capture_extended_events.py`), zero types captured within the observation window; not retried, see P2's Resolution |
 | FLK-14 | P2: Coverage extension (mapping table update) | T21/T22 | Verified - not applicable, no type was mapped (no real sample to map from) |
 | FLK-15 | P2: Coverage extension (fallback resolved per type) | T21/T22 | Verified - not applicable, all 6 types deliberately stayed on the fallback path |
-| FLK-16 | P2: Coverage extension (SponsorshipEvent escape valve) | T20-T22 | Verified - escape valve exercised, and by explicit user decision (2026-08-24) extended from `SponsorshipEvent` alone to all 6 P2 types |
+| FLK-16 | P2: Coverage extension (SponsorshipEvent escape valve) | T20-T22 | Verified - escape valve exercised, extended by explicit user decision from `SponsorshipEvent` alone to all 6 P2 types |
 
 **ID format:** `FLK-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 16 total, 16 mapped to tasks, 14 Verified, 2 Implemented pending live re-verification (FLK-08's key fix, FLK-11's `schema_version` sub-case) - see `tasks.md` T16/T19 and T15 for the open items
+**Coverage:** 16 total, 16 mapped to tasks, 15 Verified, 1 Implemented pending FLK-11's `schema_version` sub-case - see `tasks.md` T15 for the open item
 
 ---
 
@@ -221,4 +219,4 @@
 - [ ] `docker compose up` brings up Kafka (with `events-raw`/`events-normalized` explicitly provisioned), the ingestion service, and a Flink cluster, all from one command
 - [ ] The PyFlink job normalizes all 11 mapped GitHub event types into `events-normalized`, verified against real captured traffic for the 4 types that were already sampled and against docs-plus-verified-nested-shapes fixtures for the other 7
 - [ ] `events-normalized` messages are keyed by `repo_name`
-- [x] The remaining 6 event types are mapped from real traffic (or `SponsorshipEvent` is explicitly documented as an open gap) - **2026-08-24**: capture attempted and aborted with zero results; by explicit user decision all 6 types (not just `SponsorshipEvent`) are documented as an open gap on the fallback path rather than mapped
+- [x] The remaining 6 event types are mapped from real traffic, or explicitly documented as an open gap - capture attempted and aborted with zero results; by explicit user decision all 6 types (not just `SponsorshipEvent`) are documented as an open gap on the fallback path rather than mapped (see P2's Resolution)
