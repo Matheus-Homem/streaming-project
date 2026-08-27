@@ -5,7 +5,7 @@
 `events-normalized` carries one row per GitHub event, keyed by `repo_name`. Nothing yet turns that
 stream into a metric someone could put on a dashboard. This feature adds the aggregation stage
 between `events-normalized` and the future OpenSearch/Grafana layer: a Flink SQL job that windows
-the normalized stream and publishes counted results to a new `events-aggregated` topic.
+the normalized stream and publishes counted results to a new `events-analytics` topic.
 
 Per `AD-009`, this stage has no YAML contract - the Flink SQL query itself, as a `.sql` file, is the
 declarative contract. `AD-006`'s Table API/SQL direction for aggregation is unchanged; what changed
@@ -14,9 +14,9 @@ is that nothing compiles *to* the SQL - it is authored directly.
 ## Goals
 
 - [x] A running Flink SQL job counts `events-normalized` rows per `repo_name` per 5-minute tumbling
-      window (event time) and publishes one row per closed window to `events-aggregated`.
+      window (event time) and publishes one row per closed window to `events-analytics`.
 - [x] The job survives a restart without losing an in-flight window's partial state (checkpointing).
-- [x] Publishing to `events-aggregated` is exactly-once - no duplicate window result after a restart.
+- [x] Publishing to `events-analytics` is exactly-once - no duplicate window result after a restart.
 
 ## Out of Scope
 
@@ -25,7 +25,7 @@ is that nothing compiles *to* the SQL - it is authored directly.
 | Event counts broken down by `event_type` | Not selected as P1 metric; shape (composite key? separate query?) not decided - future increment |
 | Distinct-actor count per repo/window | Different aggregation class (`COUNT(DISTINCT entity_id)`, larger state) - future increment |
 | Global event count (unkeyed, no `repo_name`) | Not selected as P1 metric - future increment |
-| OpenSearch / Grafana consumption of `events-aggregated` | Separate planned stage per `CLAUDE.md`'s Architecture section - own feature |
+| OpenSearch / Grafana consumption of `events-analytics` | Separate planned stage per `CLAUDE.md`'s Architecture section - own feature |
 | DDL for `events-normalized` derived from `flink/normalization/sources/github.yml` | `PLATFORM.md`'s "Aggregation is SQL" section leaves this as a per-feature call; P1's query only touches envelope fields, so a hand-written `CREATE TABLE` is enough - revisit if a future query needs `event_types` columns |
 | Sliding/hopping windows, side-output for late data | P1 uses tumbling windows with late data dropped (see Assumptions) |
 | A generalized "add a new aggregation query" mechanism | Each aggregation query is its own `.sql` file / job per `AD-009`; no framework for registering new ones is built here |
@@ -60,7 +60,7 @@ is that nothing compiles *to* the SQL - it is authored directly.
 | Idempotency / retry / duplicate handling | AC-covered - exactly-once delivery guarantee (P1 AC8); the aggregation itself (`COUNT` per window) is naturally idempotent under reprocessing even before that guarantee |
 | Auth boundaries & rate limits | N/A - internal pipeline stage, no external caller, no auth surface |
 | Concurrency / ordering | AC-covered - `repo_name`-keyed grouping partitions naturally across `events-normalized`'s existing 3 Kafka partitions (P1 AC1); `COUNT(*)` has no ordering dependency within a window |
-| Data lifecycle / expiry | `events-aggregated` gets the same `retention.ms=604800000` (7 days) as the other two topics per the existing `create-topics.sh` convention (P1 AC9) |
+| Data lifecycle / expiry | `events-analytics` gets the same `retention.ms=604800000` (7 days) as the other two topics per the existing `create-topics.sh` convention (P1 AC9) |
 | Observability | Flink's own JobManager UI (already exposed on `:8081` for the normalization job) covers job/checkpoint metrics; a skipped-row log line covers malformed input (P1 AC6). No new observability tooling built here |
 | External-dependency failure | N/A beyond what Kafka's own client defaults already handle (connection retry) - no new external dependency introduced |
 | State-transition integrity | AC-covered - a window's lifecycle (open → watermark passes → emit once → closed) is the state machine; P1 AC3-AC6 pin its behavior |
@@ -86,7 +86,7 @@ reuses the same job shape.
    keyed by `repo_name`, with `event_time` as the event-time attribute.
 2. The system SHALL apply a bounded-out-of-orderness watermark of 30 seconds on `event_time`.
 3. WHEN a 5-minute tumbling window (event time) closes for a given `repo_name` THEN the system SHALL
-   publish exactly one row to `events-aggregated` containing `repo_name`, `window_start`,
+   publish exactly one row to `events-analytics` containing `repo_name`, `window_start`,
    `window_end`, and `event_count` (the number of `events-normalized` rows for that `repo_name` whose
    `event_time` fell inside the window).
 4. WHILE no `events-normalized` row exists for a given `repo_name` in a window, the system SHALL NOT
@@ -97,14 +97,14 @@ reuses the same job shape.
    the system SHALL skip that row, log it, and continue processing.
 7. The system SHALL checkpoint its state at a regular interval so that a job restart resumes without
    losing an in-flight window's partial count.
-8. The system SHALL publish to `events-aggregated` with an exactly-once delivery guarantee - a job
+8. The system SHALL publish to `events-analytics` with an exactly-once delivery guarantee - a job
    restart SHALL NOT result in a duplicate row for a window already published before the restart.
-9. The system SHALL publish `events-aggregated` records keyed by `repo_name` (the Kafka record key,
+9. The system SHALL publish `events-analytics` records keyed by `repo_name` (the Kafka record key,
    not only a JSON field).
 
 **Independent Test**: Publish a handful of hand-crafted `events-normalized` messages spanning two
 5-minute windows and two repos (including one message with `event_time` late enough to miss its
-window's watermark, and one malformed message), run the job, and inspect `events-aggregated` in
+window's watermark, and one malformed message), run the job, and inspect `events-analytics` in
 Kafka UI - correct counts per repo/window, the late event absent from any count, the malformed
 message skipped without killing the job, and a duplicate check by restarting the job mid-stream and
 confirming affected windows are not re-published.
@@ -144,13 +144,13 @@ confirming affected windows are not re-published.
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 9 total, 9 mapped to tasks, 9 Verified (2026-08-25 - T6 live verification: FLA-09 agent-observed via Kafka UI screenshot, FLA-02/03/04/05/06/07/08 user-attested in chat, not independently observed by the agent - see `validation.md`'s evidence-tier note; consistent with this feature's documented live-only test strategy, Test Coverage Matrix in `tasks.md`)
+**Coverage:** 9 total, 9 mapped to tasks, 9 Verified (T6 live verification: FLA-09 agent-observed via Kafka UI screenshot, FLA-02/03/04/05/06/07/08 user-attested in chat, not independently observed by the agent - see `validation.md`'s evidence-tier note; consistent with this feature's documented live-only test strategy, Test Coverage Matrix in `tasks.md`)
 
 ---
 
 ## Success Criteria
 
-- [x] `events-aggregated` receives one row per `repo_name` per closed 5-minute window, matching a
+- [x] `events-analytics` receives one row per `repo_name` per closed 5-minute window, matching a
       hand-verified count against the source messages used in the Independent Test.
 - [x] A job restart mid-window does not lose the in-flight window's partial count and does not
       duplicate an already-published window's row.

@@ -9,12 +9,12 @@
 
 ## Architecture Overview
 
-One Flink SQL job, deployed as its own jobmanager/taskmanager pair (mirroring `flink-normalization`'s deploy shape per `AD-005`), reads `events-normalized` as a Table API source table, applies a 5-minute tumbling window keyed by `partition_key` with a bounded-out-of-orderness watermark, and writes one row per closed window to a new `events-aggregated` topic via an exactly-once Kafka sink.
+One Flink SQL job, deployed as its own jobmanager/taskmanager pair (mirroring `flink-normalization`'s deploy shape per `AD-005`), reads `events-normalized` as a Table API source table, applies a 5-minute tumbling window keyed by `partition_key` with a bounded-out-of-orderness watermark, and writes one row per closed window to a new `events-analytics` topic via an exactly-once Kafka sink.
 
 ```mermaid
 graph LR
     A[events-normalized] -->|source table DDL + WATERMARK| B["TABLE(TUMBLE(...)) + GROUP BY"]
-    B -->|sink table DDL, exactly-once| C[events-aggregated]
+    B -->|sink table DDL, exactly-once| C[events-analytics]
 
     subgraph "docker-compose: new pair, mirrors normalization"
     D[aggregation<br/>jobmanager, standalone-job -py app.py] --- E[taskmanager-aggregation]
@@ -33,7 +33,7 @@ Per `AD-009`, there is no YAML contract compiling to this SQL — the `.sql` fil
 | --- | --- | --- |
 | Flink `Dockerfile` pattern (base image + Kafka SQL connector JAR + `usrlib` layout) | `flink/normalization/Dockerfile` | Copy-and-adapt for `flink/aggregation/Dockerfile` — the JAR download step is already there and unused by normalization's DataStream job; this feature is its first real consumer |
 | `standalone-job -py` jobmanager + dedicated taskmanager compose pattern | `infra/docker/docker-compose.yml` (`normalization`/`taskmanager` services) | Copy-and-adapt into `aggregation`/`taskmanager-aggregation` |
-| Topic provisioning convention | `infra/docker/scripts/create-topics.sh` | Add `events-aggregated` to the `TOPICS` array — same partitions/replication/retention as the other two topics |
+| Topic provisioning convention | `infra/docker/scripts/create-topics.sh` | Add `events-analytics` to the `TOPICS` array — same partitions/replication/retention as the other two topics |
 | `shared/logger.py` (`setup_logging`) | `shared/logger.py` | Same per-class logger pattern in `flink/aggregation/app.py` |
 | `.env` / `dotenv` load + `KAFKA_BOOTSTRAP_SERVERS` env var pattern | `flink/normalization/app.py` | Same shape in `flink/aggregation/app.py` |
 | Config-selects-behavior pattern (`python -m ingestion.app --source github`) | `ingestion/app.py` | `flink/aggregation/app.py` reads *which* query to run from an env var (`AGGREGATION_QUERY_FILE`) instead of hardcoding a filename — same principle, different mechanism (env var, since this runs inside a container without CLI args) |
@@ -76,7 +76,7 @@ Per `AD-009`, there is no YAML contract compiling to this SQL — the `.sql` fil
 
 ### `infra/docker/scripts/create-topics.sh`
 
-- **Purpose**: Add `"events-aggregated"` to the `TOPICS` array — same partitions/replication-factor/retention as `events-raw`/`events-normalized`.
+- **Purpose**: Add `"events-analytics"` to the `TOPICS` array — same partitions/replication-factor/retention as `events-raw`/`events-normalized`.
 
 ---
 
@@ -100,7 +100,7 @@ Sink table columns (the output row, per spec's Assumptions): `repo_name` (aliase
 | Malformed/schema-incompatible row from `events-normalized` | Source table's JSON format connector option to skip-and-log (exact option name TBD — verify against Flink 2.3 docs in Execute) | Row skipped, job continues (FLA-06) |
 | Event arrives past the watermark | Dropped by Flink's window/watermark mechanics, no code needed | Not counted, no error (FLA-05) |
 | Job crash mid-window | Checkpoint restore | Window's partial count resumes from the checkpoint, not from zero (FLA-07) |
-| Job restart after a window was already published | Exactly-once Kafka transactional sink | No duplicate row in `events-aggregated` (FLA-08) |
+| Job restart after a window was already published | Exactly-once Kafka transactional sink | No duplicate row in `events-analytics` (FLA-08) |
 | Sink's transaction timeout exceeds the broker's `transaction.max.timeout.ms` | Kafka refuses to open the transaction | Job fails fast at startup with a clear error, not at an arbitrary point in the stream |
 
 ---
