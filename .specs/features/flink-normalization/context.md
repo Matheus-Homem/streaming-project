@@ -39,9 +39,9 @@ Build the first Flink consumer of `events-raw`: a PyFlink job that flattens raw 
 
 ### Architecture: pluggable normalizer (AD-004)
 
-- The Flink job calls the `NormalizationEngineBase` port (ABC), mirroring `ingestion/ports.py`'s `IngestionClientBase`/`IngestionEngineBase`/`IngestionProducerBase` pattern. Per `AD-006` the only concrete implementation is the source-agnostic `NormalizationEngine`; per-source knowledge lives in YAML contracts, not in a class per source. Current file-by-file mapping (relocated more than once since): `design.md`'s naming-drift table.
+- The Flink job calls the `EventEvaluator`/`ContractRepository` ports (ABCs, `flink/normalization/domain/__init__.py`), mirroring `ingestion/ports.py`'s/`ingestion/domain/__init__.py`'s port pattern. Per `AD-006` the only concrete implementation is the source-agnostic `EventNormalizer`; per-source knowledge lives in YAML contracts, not in a class per source.
 - Triggered by the user's long-term intent to grow this project into an API-agnostic real-time ingestion/analytics platform (register arbitrary APIs - not just GitHub/GitLab - and stream/aggregate their events). Recorded as a formal project-wide decision in `.specs/STATE.md` (`AD-004`), not just a local choice for this feature.
-- Consequence for the normalized schema: it splits into a **domain-neutral envelope** (`source`, `event_id`, `event_type`, `actor`, `observed_at`, `schema_version`, `partition_key`) that any future source would populate the same way, plus a **source-specific fields block** where GitHub's `repo_name`, `repo_id`, `org_login`, and all the per-event-type curated fields live. The envelope never encodes VCS-specific vocabulary at the top level.
+- Consequence for the normalized schema: it splits into a **domain-neutral envelope** (`source`, `event_id`, `event_type`, `entity_id`, `entity_name`, `event_time`, `ingested_at`, `schema_version`, `partition_key`) that any future source would populate the same way, plus a **source-specific fields block** where GitHub's `repo_name`, `repo_id`, `org_login`, and all the per-event-type curated fields live. The envelope never encodes VCS-specific vocabulary at the top level.
 
 ### Partition key
 
@@ -58,8 +58,8 @@ Which types are verified/docs-sourced/unresolved, and the 4/7/6 split: `spec.md`
 
 ### Declined / Undiscussed Gray Areas → Assumptions
 
-- **Fallback shape for the 6 not-yet-mapped event types**: envelope fields populated, source-specific fields block empty/null, event still published (not dropped). Chosen by the agent, not explicitly asked - low-stakes and reversible, follows the "don't lose data" bias already established in ingestion (`GitHubEvent` validation failures are logged and skipped, but only for genuinely invalid payloads, not merely under-mapped ones).
-- **Malformed message / unknown `schema_version` handling** in the Flink job: log and skip, without crashing the job. Mirrors `ingestion/adapters/engine.py`'s existing pattern for invalid `GitHubEvent` payloads.
+- **Fallback shape for the 6 not-yet-mapped event types**: envelope fields populated, source-specific fields block empty/null, event still published (not dropped). Chosen by the agent, not explicitly asked - low-stakes and reversible, follows the "don't lose data" bias already established in ingestion (`EventModel` validation failures are logged and skipped, but only for genuinely invalid payloads, not merely under-mapped ones).
+- **Malformed message / unknown `schema_version` handling** in the Flink job: log and skip, without crashing the job. Mirrors `ingestion/domain/formatter.py`'s existing pattern for invalid events.
 - **Processing semantics**: at-least-once is sufficient for this feature (the normalizer is a stateless map; reprocessing the same message yields the same output). Exactly-once semantics are deferred to whenever stateful aggregation lands.
 - **Flink job resilience/checkpointing hardening** (restart strategies, failure recovery tuning): out of scope for this feature, mirroring how `streaming-ingestion`'s resilience work (P2) followed its initial P1 rather than shipping together.
 
