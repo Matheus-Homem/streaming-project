@@ -11,6 +11,7 @@ clean:
 	@echo "🧼 Cleaning cache files..."
 	@find . -type f -name "*.pyc" ! -path "./.venv/*" -delete
 	@find . -type d -name "__pycache__" ! -path "./.venv/*" -delete
+	@rm -r .pytest_cache
 
 neat:
 	@echo "🧼 Cleaning code using autoflake, isort and black..."
@@ -23,9 +24,6 @@ neat:
 test:
 	@echo "🧪 Running suite tests..."
 	-@python -m pytest -p no:cacheprovider -s -vv --log-cli-level=INFO --cov=ingestion --cov=flink --cov-report=term-missing tests
-
-ingestion-default:
-	@python -m ingestion.app --source github
 
 kafka-up:
 	@echo "🚀 Starting Kafka docker environment (MODE=$(or $(MODE),full))..."
