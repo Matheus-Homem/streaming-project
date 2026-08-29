@@ -2,19 +2,21 @@
 
 ## Problem Statement
 
-`.specs/RFC-conviction-index.md` names five platform capabilities the pipeline needs before a
-Conviction Index query can be written, none of which exist today: typed normalization fields, a
-per-source watermark declaration, an envelope that tolerates sources with no actor, ingestion for
-single-object/no-id/no-type responses, and a push transport. `tmp/platform-refactor-plan-v2.md`
-independently arrived at two of the same gaps (field types, stream properties) from the platform
-refactor's own inventory (F2). A sixth capability - a value-lookup transform in the normalization
-DSL - was added after a follow-up gap analysis (2026-08-28, see below): the RFC's own join needs a
-way to reconcile three exchanges' three different symbol formats onto one asset key, which nothing
-in P1-P5 provides. This feature is the union of all of that: every piece of new Python and every
-contract-format change needed to make the five new sources (Binance spot, Coinbase, Kraken,
-mempool.space, Binance Futures) *representable* by the platform - stopping short of writing those
-five sources' own `interface/sources/*/` files, the join query itself, OpenSearch, and Grafana,
-all of which are configuration-only or separate stages once this lands.
+A now-retired exploration document (`RFC-conviction-index.md`, preserved in git history - see
+`docs/USE-CASES.md` for the current record of the Conviction Index's business case) named five
+platform capabilities the pipeline needs before a Conviction Index query can be written, none of
+which exist today: typed normalization fields, a per-source watermark declaration, an envelope that
+tolerates sources with no actor, ingestion for single-object/no-id/no-type responses, and a push
+transport. `tmp/platform-refactor-plan-v2.md` independently arrived at two of the same gaps (field
+types, stream properties) from the platform refactor's own inventory (F2). A sixth capability - a
+value-lookup transform in the normalization DSL - was added after a follow-up gap analysis
+(2026-08-28, see below): the join needs a way to reconcile three exchanges' three different symbol
+formats onto one asset key, which nothing in P1-P5 provides. This feature is the union of all of
+that: every piece of new Python and every contract-format change needed to make the five new sources
+(Binance spot, Coinbase, Kraken, mempool.space, Binance Futures) *representable* by the platform -
+stopping short of writing those five sources' own `interface/sources/*/` files, the join query
+itself, OpenSearch, and Grafana, all of which are configuration-only or separate stages once this
+lands.
 
 **Formalized order** (user decision, 2026-08-27, extended 2026-08-28): this spec carries six
 stories, P1-P6, in the order below. They are meant to be picked up **in this order** as separate

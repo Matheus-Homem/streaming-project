@@ -141,7 +141,7 @@ still hold `FieldRule` values; only the shape of `FieldRule` itself changes.
 
 | Decision | Choice | Rationale |
 | --- | --- | --- |
-| Type representation | Plain string, grammar-validated at load, not parsed into a structured AST | See Stop Point 1 discussion in chat - matches the project's incremental-MVP philosophy (`RFC.md`, `PLATFORM.md`); no consumer needs the parsed structure until a future DDL generator exists |
+| Type representation | Plain string, grammar-validated at load, not parsed into a structured AST | See Stop Point 1 discussion in chat - matches the project's incremental-MVP philosophy (`STATE.md` note under `AD-006`, `PLATFORM.md`); no consumer needs the parsed structure until a future DDL generator exists |
 | Type grammar nesting depth | One level (`ARRAY<ROW<...>>` supported; `ROW` fields are scalar-only, no further nesting) | Covers the one real case that needs it (`GollumEvent.pages`); deeper nesting is YAGNI until a real case demands it |
 | `default: null` vs. absent distinguishability mechanism | `Pydantic.BaseModel.model_fields_set` | Native Pydantic mechanism, no custom sentinel type needed - stricter and simpler than the project's prior `is not None` convention |
 | `PRESENCE` vs. `BOOLEAN` as two distinct type tokens | Kept separate (not inferred from data shape) | Resolves a real ambiguity found during Specify: `public` (native JSON boolean, no transform) and `issue_is_pull_request` (presence-of-field boolean, today's `as: boolean`) cannot share one token without the compiler guessing from the payload's actual shape |
