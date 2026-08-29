@@ -1,8 +1,8 @@
 # streaming-project
 
-A hands-on learning project for building a streaming data pipeline end to end — Kafka, Flink, distributed storage/search (OpenSearch), and observability (Grafana) — while actually planning the architecture and choosing components, rather than having them handed over working. Kubernetes, Drone (CI/CD), and Terraform (IaC) are opportunistic additions if a natural chance to use them comes up.
+A hands-on learning project for building a streaming data pipeline end to end — Kafka, Flink, distributed storage/search (OpenSearch), observability (Grafana), and orchestration (Kubernetes, ArgoCD) — while actually planning the architecture and choosing components, rather than having them handed over working. Terraform (IaC) is an opportunistic addition if a natural chance to use it comes up.
 
-See [`.specs/RFC.md`](.specs/RFC.md) for the full motivation and learning goals, and [`.specs/STATE.md`](.specs/STATE.md) for project-wide decisions and the current handoff state.
+See [`docs/VISION.md`](docs/VISION.md) for what the platform is and why it exists, [`docs/USE-CASES.md`](docs/USE-CASES.md) for the problem it's currently pointed at, and [`.specs/STATE.md`](.specs/STATE.md) for project-wide decisions and the current handoff state.
 
 ## Architecture
 
@@ -36,7 +36,8 @@ GitHub/GitLab Events API --> ingestion (client -> formatter -> producer) --> Kaf
 - [`shared/`](shared/) — cross-cutting utilities: `models.py` (`RawEvent`, the domain-neutral envelope), `logger.py` (per-module logging setup)
 - [`tests/`](tests/) — mirrors `ingestion/`/`flink/`/`shared/` 1:1, one test file per source module
 - [`infra/docker/`](infra/docker/) — local infra: `docker-compose.yml` (Kafka cluster, Kafka UI, ingestion/normalization/analytics containers, Flink job/task managers), `docker-compose.dev.yml` (lighter single-broker overlay), `scripts/create-topics.sh`
-- [`.specs/`](.specs/) — the spec-driven workflow: `RFC.md` (why this project exists), `STATE.md` (decisions + handoff), `PLATFORM.md` (the contract-driven-authoring decision), `features/[name]/` (spec, design, tasks per feature)
+- [`docs/`](docs/) — [`VISION.md`](docs/VISION.md) (what the platform is and why) and [`USE-CASES.md`](docs/USE-CASES.md) (what it's used for) — never references `.specs/` or `.mentor/`
+- [`.specs/`](.specs/) — the spec-driven workflow: `STATE.md` (decisions + handoff), `PLATFORM.md` (the contract-driven-authoring decision), `features/[name]/` (spec, design, tasks per feature)
 
 ## Requirements
 
