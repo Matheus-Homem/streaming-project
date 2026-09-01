@@ -79,13 +79,13 @@ empirical (need real multi-cadence data to answer), not code this spec could pre
 | --- | --- | --- | --- |
 | Story order and independence | P1-P6 as listed above; P5 depends on P4, P6 depends on P1, the rest are independent of each other | User decision, 2026-08-27/28 - fixes the answer to "what's next" without re-litigating priority each session | y |
 | `map:` transform's declaration shape | An inline dict on the `FieldRule` itself (`map: {BTCUSDT: BTC, XBTUSD: BTC}`), not a reference to a shared external lookup file | Agent default - mechanical/plumbing (a config shape, not a trade-off); a shared cross-contract lookup file is a real extension but nothing in P1-P6 needs one yet - only per-field, per-contract substitution | n |
-| `map:` mutual exclusivity with other `FieldRule` keys | `map:` requires `from:` (or `take:`, applied to the plucked scalar) and is mutually exclusive with `expression:` - the same shape restriction `take:`/`as:` already had relative to `expression:` | Agent default - P6's actual need (RFC §5.3-Q7) is a plain scalar substitution; combining `map:` with `expression:`'s arbitrary JMESPath is unneeded complexity not asked for | n |
+| `map:` shape | `map:` requires `from:` (or `take:`, applied to the plucked scalar) to resolve the raw value it substitutes | Agent default - mechanical/plumbing, `map:` needs a resolved value to look up in its table | n |
 | Unmapped raw value at runtime (a symbol not in the table) | Resolves to `None`, composing with `default:` exactly like every other transform - no contract-load-time validation of "every possible value is covered" (the table is static, the real-world values it must cover are not knowable at authoring time) | Consistent with the project's existing null-tolerant philosophy (`PLATFORM.md`: JMESPath returns null on a missing path rather than raising) - an unrecognized symbol degrades to a null joinable key instead of failing the whole event | n |
 | `type:` is mandatory on every `FieldRule` | No inference tier - every field (`partition_key`, `envelope`, `common`, `event_types`) declares `type:` explicitly | User decision - no ambiguity, no two-sources-of-truth with `as:`, migration of `github.yml` is mechanical (visit each field once) | y |
 | `as:` is removed from the contract format entirely | `FieldRule` no longer accepts `as:` (`extra="forbid"` already rejects unknown keys, so this is enforced for free once the field is deleted from the model) | User decision | y |
 | How `type: BOOLEAN` and presence-derived booleans coexist | Two distinct type tokens: `type: BOOLEAN` compiles to a direct pass-through of the JSON value (today's `public` field - no transform); `type: PRESENCE` compiles to today's `as: boolean` behavior (`from != null`), and is representable downstream as `BOOLEAN` | User decision, 2026-08-27, resolving a real ambiguity found while specifying: `public` (native JSON boolean) and `issue_is_pull_request` (presence-of-field boolean) cannot share one token without the compiler guessing from the data shape | y |
 | How `type: TIMESTAMP` replaces `as: timestamp` | `type: TIMESTAMP` always compiles to `iso_to_millis(...)` (today's `as: timestamp` behavior); its physical/downstream representation is `BIGINT` | No ambiguous case exists for this one the way `BOOLEAN` had - every `as: timestamp` field today is an ISO string needing conversion | y |
-| Exact type-token vocabulary and its grammar (scalar names, `ARRAY<T>` / `ROW<field: TYPE, ...>` nesting syntax, how deep nesting is parsed) | Deferred to Design - this spec fixes the *capability* (must express scalars, arrays of scalars, and the `GollumEvent.pages`-shaped array-of-objects case), not the literal grammar | Mechanical/plumbing once the capability is fixed - a Design-phase call per `.claude/mentor-design-pairing.md`'s "config file shape" carve-out, not a product trade-off | n |
+| Exact type-token vocabulary and its grammar (scalar names, `ARRAY<T>` nesting syntax) | Deferred to Design - this spec fixes the *capability* (must express scalars and arrays of scalars), not the literal grammar | Mechanical/plumbing once the capability is fixed - a Design-phase call per `.claude/mentor-design-pairing.md`'s "config file shape" carve-out, not a product trade-off | n |
 | `default: null` vs. no `default` declared | Becomes distinguishable: `FieldRule` must expose whether a `default` key was present in the source YAML at all (independent of its value), not just whether the resolved value is `None` | User decision, 2026-08-27 - matters once `type:` exists, because "no default" and "explicit null default" are different nullability statements a future DDL generator needs to tell apart; the mechanism (e.g. Pydantic's `model_fields_set`) is a Design-phase call | y |
 | Where per-source stream properties live | A new top-level `stream:` block in `interface/sources/<name>/normalization.yml`, co-located with the rest of that source's normalization contract | Matches the existing co-location convention `interface-layout` set (ingestion + normalization already share a directory); a lateness bound is a property of how a source's events arrive, which is what the rest of that file already describes | n |
 | Stream property keys and defaults | `watermark_lateness_seconds` (required, no default - every source must state this explicitly since it varies by source), `idle_timeout_seconds` (optional, `null` = no idleness timeout configured) | Matches the two concrete needs named in `platform-refactor-plan-v2.md` Part I and RFC §5.3-Q2/Findings; exact validation bounds (min/max seconds) left to Design | n |
@@ -123,8 +123,7 @@ empirical (need real multi-cadence data to answer), not code this spec could pre
 
 **User Story**: As the platform, I want every field rule in a normalization contract to declare its
 destination type so that a future DDL generator (and any human reading the contract) knows a
-field's shape without inferring it from `as:`/`take:`/`expression:`, and so `ARRAY`/`ROW`-shaped
-fields (today only expressible via the `expression:` escape hatch, like `GollumEvent.pages`) are
+field's shape without inferring it from `as:`/`take:`, and so `ARRAY`-shaped fields are
 representable with a declared shape.
 
 **Why P1**: Every later story that touches the normalization contract (P2's `stream:` block sits in
@@ -137,9 +136,7 @@ build once the type system exists than to retrofit under them.
    `event_types` entry) to declare a `type:` - a contract missing `type:` on any field SHALL fail
    validation at contract-load time, not at evaluation time.
 2. The system SHALL support, at minimum, the following type vocabulary: `STRING`, `BOOLEAN`,
-   `PRESENCE`, `TIMESTAMP`, `BIGINT`, `INT`, `DOUBLE`, `ARRAY<T>` (for any scalar `T`), and
-   `ROW<field: TYPE, ...>` with at least one level of nesting (an `ARRAY<ROW<...>>`, covering
-   `GollumEvent.pages`'s existing shape).
+   `PRESENCE`, `TIMESTAMP`, `BIGINT`, `INT`, `DOUBLE`, and `ARRAY<T>` (for any scalar `T`).
 3. WHEN a field declares `type: PRESENCE` THEN the system SHALL compile it exactly as today's
    `as: boolean` (a presence check against its `from:` path, `!= null`), independent of the actual
    JSON type of the value at that path.
@@ -149,8 +146,8 @@ build once the type system exists than to retrofit under them.
    at load time (`as:` no longer exists in the format - this is `extra="forbid"`'s existing behavior
    once the field is removed from the model, not new logic).
 6. WHEN a field declares `type: BOOLEAN` (not `PRESENCE`) THEN the system SHALL evaluate its `from:`/
-   `take:`/`expression:` path and pass the resolved JSON value through unchanged (no presence
-   coercion) - matching today's `public` field's untransformed behavior.
+   `take:` path and pass the resolved JSON value through unchanged (no presence coercion) -
+   matching today's `public` field's untransformed behavior.
 7. The system SHALL distinguish "no `default:` declared" from "`default: null` declared" on a
    `FieldRule`, exposing this distinction on the model (not only on the resolved value).
 8. `interface/sources/github/normalization.yml` SHALL be migrated to the new vocabulary with
@@ -307,10 +304,8 @@ through a declared lookup table so that three exchanges' three different symbol 
 cross-source join possible on that key.
 
 **Why P6**: Named directly by RFC §5.3-Q7 as needed for the Conviction Index join and unmet by any
-of P1-P5 - `take:`/`as:`/`type:` express shape and type, not value substitution, and hand-writing a
-lookup as raw `expression:` JMESPath is exactly the "bad programming language written in YAML"
-`PLATFORM.md` warns the escape hatch must not become. Depends on P1 only, since the mapped field's
-output still declares a `type:` like any other field.
+of P1-P5 - `take:`/`as:`/`type:` express shape and type, not value substitution. Depends on P1 only,
+since the mapped field's output still declares a `type:` like any other field.
 
 **Acceptance Criteria**:
 
@@ -320,9 +315,7 @@ output still declares a `type:` like any other field.
    substitute the resolved value through the table before applying `type:`.
 3. IF a resolved value has no entry in the declared `map:` table THEN the system SHALL fall through
    to `default:` if declared, or produce `None` otherwise - never raise.
-4. `map:` SHALL be mutually exclusive with `expression:` on the same `FieldRule` (contract validation
-   rejects both declared together), matching the existing `from:`/`expression:` exclusivity pattern.
-5. `interface/sources/github/normalization.yml` SHALL be unaffected - `map:` is new capability, not a
+4. `interface/sources/github/normalization.yml` SHALL be unaffected - `map:` is new capability, not a
    requirement on any existing field.
 
 **Independent Test**: A hand-crafted contract with a field declaring
@@ -334,9 +327,6 @@ symbol (`ETHUSDT`) with no `default:` declared normalizes to `None` without rais
 
 ## Edge Cases
 
-- IF a `ROW<...>` type declaration nests a field whose own type is invalid (unknown token) THEN
-  contract validation SHALL fail with an error identifying the offending nested field, not a generic
-  parse failure (P1).
 - IF `watermark_lateness_seconds` or `idle_timeout_seconds` is declared as zero or negative THEN
   contract validation SHALL fail (P2).
 - IF a contract declares `entity_id` but omits `entity_name` (or vice versa) THEN the system SHALL
@@ -348,7 +338,6 @@ symbol (`ETHUSDT`) with no `default:` declared normalizes to `None` without rais
 - IF a WebSocket source's subscribe frame is not acknowledged within that exchange's documented
   window (e.g. Coinbase's 5 seconds) THEN the system SHALL treat it as a failed connection attempt
   and retry, not hang indefinitely (P5).
-- IF a field rule declares both `map:` and `expression:` THEN contract validation SHALL fail (P6).
 
 ---
 
@@ -357,7 +346,7 @@ symbol (`ETHUSDT`) with no `default:` declared normalizes to `None` without rais
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
 | CVF-01 | P1: Mandatory `type:` on every field | Design | Pending |
-| CVF-02 | P1: Type vocabulary (scalars, `ARRAY<T>`, `ROW<...>`) | Design | Pending |
+| CVF-02 | P1: Type vocabulary (scalars, `ARRAY<T>`) | Design | Pending |
 | CVF-03 | P1: `type: PRESENCE` compiles as `as: boolean` did | Design | Pending |
 | CVF-04 | P1: `type: TIMESTAMP` compiles as `as: timestamp` did | Design | Pending |
 | CVF-05 | P1: `as:` removed, rejected if present | Design | Pending |
@@ -387,14 +376,13 @@ symbol (`ETHUSDT`) with no `default:` declared normalizes to `None` without rais
 | CVF-29 | P6: `map:` key, inline lookup table | Design | Pending |
 | CVF-30 | P6: `map:` resolves after `from:`/`take:`, before `type:` | Design | Pending |
 | CVF-31 | P6: unmapped value falls to `default:` or `None` | Design | Pending |
-| CVF-32 | P6: `map:`/`expression:` mutual exclusivity | Design | Pending |
-| CVF-33 | P6: `github.yml` unaffected | Design | Pending |
+| CVF-32 | P6: `github.yml` unaffected | Design | Pending |
 
 **ID format:** `CVF-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 33 total, 0 mapped to tasks, 33 unmapped (Design phase not yet run)
+**Coverage:** 32 total, 0 mapped to tasks, 32 unmapped (Design phase not yet run)
 
 ---
 
