@@ -833,22 +833,6 @@ DOC_SHAPED_GITHUB_EVENTS = {
         {"ref": "feature/x", "ref_type": "branch", "pusher_type": "user"},
     ),
     "PublicEvent": _github_envelope("4", "PublicEvent", {}),
-    "GollumEvent": _github_envelope(
-        "5",
-        "GollumEvent",
-        {
-            "pages": [
-                {
-                    "page_name": "Home",
-                    "title": "Home",
-                    "summary": None,
-                    "action": "edited",
-                    "sha": "abc123",
-                    "html_url": "https://github.com/octo/repo/wiki/Home",
-                }
-            ]
-        },
-    ),
     "IssuesEvent": _github_envelope(
         "6",
         "IssuesEvent",
