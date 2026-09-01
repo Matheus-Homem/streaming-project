@@ -1,12 +1,15 @@
 source: github
 partition_key:
   from: repo.name
+  type: STRING
 
 envelope:
   entity_id:
     from: actor.id
+    type: BIGINT
   entity_name:
     from: actor.login
+    type: STRING
   event_time:
     from: created_at
     type: TIMESTAMP
@@ -14,33 +17,44 @@ envelope:
 common:
   repo_id:
     from: repo.id
+    type: BIGINT
   repo_name:
     from: repo.name
+    type: STRING
   org_id:
     from: org.id
+    type: BIGINT
     default: null
   org_login:
     from: org.login
+    type: STRING
     default: null
   public:
-      from: "public"
+    from: "public"
+    type: BOOLEAN
 
 event_types:
   WatchEvent:
     action:
       from: payload.action
+      type: STRING
 
   IssueCommentEvent:
     action:
       from: payload.action
+      type: STRING
     issue_id:
       from: payload.issue.id
+      type: BIGINT
     issue_number:
       from: payload.issue.number
+      type: INT
     issue_title:
       from: payload.issue.title
+      type: STRING
     issue_state:
       from: payload.issue.state
+      type: STRING
     issue_created_at:
       from: payload.issue.created_at
       type: TIMESTAMP
@@ -49,20 +63,26 @@ event_types:
       type: TIMESTAMP
     issue_comments_count:
       from: payload.issue.comments
+      type: INT
     issue_user_login:
       from: payload.issue.user.login
+      type: STRING
     issue_labels:
       from: payload.issue.labels
       take: name
+      type: ARRAY<STRING>
     issue_is_pull_request:
       from: payload.issue.pull_request
-      type: BOOLEAN
+      type: PRESENCE
     comment_id:
       from: payload.comment.id
+      type: BIGINT
     comment_body:
       from: payload.comment.body
+      type: STRING
     comment_user_login:
       from: payload.comment.user.login
+      type: STRING
     comment_created_at:
       from: payload.comment.created_at
       type: TIMESTAMP
@@ -73,81 +93,114 @@ event_types:
   PullRequestEvent:
     action:
       from: payload.action
+      type: STRING
     pr_number:
       from: payload.pull_request.number
+      type: INT
     pr_id:
       from: payload.pull_request.id
+      type: BIGINT
     pr_base_ref:
       from: payload.pull_request.base.ref
+      type: STRING
     pr_base_sha:
       from: payload.pull_request.base.sha
+      type: STRING
     pr_base_repo_id:
       from: payload.pull_request.base.repo.id
+      type: BIGINT
     pr_base_repo_name:
       from: payload.pull_request.base.repo.name
+      type: STRING
     pr_head_ref:
       from: payload.pull_request.head.ref
+      type: STRING
     pr_head_sha:
       from: payload.pull_request.head.sha
+      type: STRING
     pr_head_repo_id:
       from: payload.pull_request.head.repo.id
+      type: BIGINT
     pr_head_repo_name:
       from: payload.pull_request.head.repo.name
+      type: STRING
     label_name:
       from: payload.label.name
+      type: STRING
       default: null
     labels:
       from: payload.labels
       take: name
+      type: ARRAY<STRING>
 
   PullRequestReviewEvent:
     action:
       from: payload.action
+      type: STRING
     pr_number:
       from: payload.pull_request.number
+      type: INT
     pr_id:
       from: payload.pull_request.id
+      type: BIGINT
     pr_base_ref:
       from: payload.pull_request.base.ref
+      type: STRING
     pr_head_ref:
       from: payload.pull_request.head.ref
+      type: STRING
     review_id:
       from: payload.review.id
+      type: BIGINT
     review_state:
       from: payload.review.state
+      type: STRING
     review_body:
       from: payload.review.body
+      type: STRING
       default: null
     review_submitted_at:
       from: payload.review.submitted_at
       type: TIMESTAMP
     review_user_login:
       from: payload.review.user.login
+      type: STRING
 
   PullRequestReviewCommentEvent:
     action:
       from: payload.action
+      type: STRING
     pr_number:
       from: payload.pull_request.number
+      type: INT
     pr_id:
       from: payload.pull_request.id
+      type: BIGINT
     pr_base_ref:
       from: payload.pull_request.base.ref
+      type: STRING
     pr_head_ref:
       from: payload.pull_request.head.ref
+      type: STRING
     comment_id:
       from: payload.comment.id
+      type: BIGINT
     comment_body:
       from: payload.comment.body
+      type: STRING
     comment_path:
       from: payload.comment.path
+      type: STRING
     comment_position:
       from: payload.comment.position
+      type: INT
       default: null
     comment_diff_hunk:
       from: payload.comment.diff_hunk
+      type: STRING
     comment_commit_id:
       from: payload.comment.commit_id
+      type: STRING
     comment_created_at:
       from: payload.comment.created_at
       type: TIMESTAMP
@@ -156,41 +209,55 @@ event_types:
       type: TIMESTAMP
     comment_user_login:
       from: payload.comment.user.login
+      type: STRING
   CreateEvent:
     ref:
       from: payload.ref
+      type: STRING
       default: null
     ref_type:
       from: payload.ref_type
+      type: STRING
     master_branch:
       from: payload.master_branch
+      type: STRING
     description:
       from: payload.description
+      type: STRING
       default: null
     pusher_type:
       from: payload.pusher_type
+      type: STRING
 
   DeleteEvent:
     ref:
       from: payload.ref
+      type: STRING
     ref_type:
       from: payload.ref_type
+      type: STRING
     pusher_type:
       from: payload.pusher_type
+      type: STRING
 
   PublicEvent: {}
 
   IssuesEvent:
     action:
       from: payload.action
+      type: STRING
     issue_id:
       from: payload.issue.id
+      type: BIGINT
     issue_number:
       from: payload.issue.number
+      type: INT
     issue_title:
       from: payload.issue.title
+      type: STRING
     issue_state:
       from: payload.issue.state
+      type: STRING
     issue_created_at:
       from: payload.issue.created_at
       type: TIMESTAMP
@@ -199,28 +266,38 @@ event_types:
       type: TIMESTAMP
     issue_comments_count:
       from: payload.issue.comments
+      type: INT
     issue_user_login:
       from: payload.issue.user.login
+      type: STRING
     issue_labels:
       from: payload.issue.labels
       take: name
+      type: ARRAY<STRING>
     assignee_login:
       from: payload.issue.assignee.login
+      type: STRING
       default: null
     assignees:
       from: payload.issue.assignees
       take: login
+      type: ARRAY<STRING>
     label_name:
       from: payload.label.name
+      type: STRING
       default: null
     labels:
       from: payload.labels
       take: name
+      type: ARRAY<STRING>
 
   MemberEvent:
     action:
       from: payload.action
+      type: STRING
     member_id:
       from: payload.member.id
+      type: BIGINT
     member_login:
       from: payload.member.login
+      type: STRING
