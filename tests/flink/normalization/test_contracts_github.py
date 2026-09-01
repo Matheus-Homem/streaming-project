@@ -104,7 +104,6 @@ PER_TYPE_FIELDS = {
     },
     "DeleteEvent": {"ref", "ref_type", "pusher_type"},
     "PublicEvent": set(),
-    "GollumEvent": {"pages"},
     "IssuesEvent": {
         "action",
         "issue_id",
@@ -315,22 +314,6 @@ class TestGithubContractDocResolvedEventTypes(GithubContractTestCase):
         self.assertEqual(set(result), ENVELOPE_FIELDS | COMMON_FIELDS)
         self.assertEqual(result["event_type"], "PublicEvent")
         self.assertEqual(result["repo_name"], "octo/repo")
-
-    def test_can_curate_gollum_pages_dropping_html_url(self):
-        result = self.normalize(DOC_SHAPED_GITHUB_EVENTS["GollumEvent"])
-
-        self.assertEqual(
-            result["pages"],
-            [
-                {
-                    "page_name": "Home",
-                    "title": "Home",
-                    "summary": None,
-                    "action": "edited",
-                    "sha": "abc123",
-                }
-            ],
-        )
 
     def test_can_resolve_issues_event_assignees_as_logins(self):
         result = self.normalize(DOC_SHAPED_GITHUB_EVENTS["IssuesEvent"])
