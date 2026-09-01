@@ -65,9 +65,8 @@ graph TD
   else at contract-load time with a clear error naming the offending token.
 - **Location**: `flink/normalization/models.py`
 - **Interfaces**:
-  - A compiled regex (or small recursive-descent check) implementing:
-    `type := SCALAR | "ARRAY<" (SCALAR | ROW) ">" | ROW`
-    `ROW := "ROW<" field ("," field)* ">"`, `field := IDENT ":" SCALAR`
+  - A compiled regex implementing:
+    `type := SCALAR | "ARRAY<" SCALAR ">"`
     `SCALAR := STRING | BOOLEAN | PRESENCE | TIMESTAMP | BIGINT | INT | DOUBLE`
   - `FieldRule.type: str` (required, no default) + `@field_validator("type")` raising `ValueError`
     with the invalid token named, on a grammar mismatch
@@ -80,15 +79,18 @@ graph TD
   instead of `as_`.
 - **Location**: `flink/normalization/domain/evaluator.py`
 - **Interfaces**: `_compile_rule(rule: FieldRule) -> str` (signature unchanged)
+  - The leading `if rule.expression: return rule.expression` branch is removed - `expression:` no
+    longer exists on `FieldRule`
   - `case FieldRule(type="PRESENCE")` → `f"{rule.from_} != \`null\`"` (was `as_="boolean"`)
   - `case FieldRule(type="TIMESTAMP")` → `f"iso_to_millis({rule.from_})"` (was `as_="timestamp"`)
-  - Every other `type:` value (`STRING`, `BOOLEAN`, `BIGINT`, `INT`, `DOUBLE`, `ARRAY<...>`,
-    `ROW<...>`) falls into the existing `case _:` (plain `from_` passthrough) or the existing
+  - Every other `type:` value (`STRING`, `BOOLEAN`, `BIGINT`, `INT`, `DOUBLE`, `ARRAY<...>`) falls
+    into the existing `case _:` (plain `from_` passthrough) or the existing
     `case FieldRule(take=take)` (list-pluck) - unchanged
   - `default` composition: `if "default" not in rule.model_fields_set:` replaces
     `if rule.default is None:`
 - **Dependencies**: `FieldRule` (T1)
-- **Reuses**: The whole method body except the two `case` arms and the `default` check line
+- **Reuses**: The method body's two `case` arms and the `default` check line - unchanged from
+  before this feature
 
 ---
 
@@ -103,8 +105,8 @@ class FieldRule(BaseModel):
     take: Optional[str] = Field(default=None)
     type: str  # NEW - required, no default, grammar-validated
     default: Optional[Any] = Field(default=None)
-    expression: Optional[str] = Field(default=None)
     # as_ REMOVED
+    # expression REMOVED
 ```
 
 No change to `NormalizationContract`, `NormalizedEvent`, or `RawEvent`.
@@ -119,9 +121,9 @@ still hold `FieldRule` values; only the shape of `FieldRule` itself changes.
 | Error Scenario | Handling | User Impact |
 | --- | --- | --- |
 | `type:` missing on a field | Pydantic raises `ValidationError` (required field with no default) | Contract fails to load; error names the missing field's path |
-| `type:` present but grammar-invalid (unknown scalar token, malformed `ROW<...>`) | `field_validator` raises `ValueError`, Pydantic wraps it into `ValidationError` | Error message includes the offending token and the field path (Pydantic's standard error context) |
+| `type:` present but grammar-invalid (unknown scalar token, malformed `ARRAY<...>`) | `field_validator` raises `ValueError`, Pydantic wraps it into `ValidationError` | Error message includes the offending token and the field path (Pydantic's standard error context) |
 | Contract declares `as:` | `extra="forbid"` raises `ValidationError` (unknown field) - no new code, inherited from the model already rejecting unknown keys | Standard Pydantic "extra fields not permitted" error naming `as` |
-| `ROW<...>` with an invalid nested field type | Grammar validator's recursive check on the `ROW<...>` body raises `ValueError` naming the specific nested field | Same as above - one error, one field named, not a generic parse failure (Edge Case requirement) |
+| Contract declares `expression:` | `extra="forbid"` raises `ValidationError` (unknown field) - same mechanism as `as:` | Standard Pydantic "extra fields not permitted" error naming `expression` |
 
 ---
 
@@ -142,7 +144,7 @@ still hold `FieldRule` values; only the shape of `FieldRule` itself changes.
 | Decision | Choice | Rationale |
 | --- | --- | --- |
 | Type representation | Plain string, grammar-validated at load, not parsed into a structured AST | See Stop Point 1 discussion in chat - matches the project's incremental-MVP philosophy (`STATE.md` note under `AD-006`, `PLATFORM.md`); no consumer needs the parsed structure until a future DDL generator exists |
-| Type grammar nesting depth | One level (`ARRAY<ROW<...>>` supported; `ROW` fields are scalar-only, no further nesting) | Covers the one real case that needs it (`GollumEvent.pages`); deeper nesting is YAGNI until a real case demands it |
+| Type grammar scope | Scalars and `ARRAY<scalar>` only - no nested/object shapes | The type vocabulary only needs to describe values a `FieldRule` can actually produce; nesting is YAGNI until a real case demands it |
 | `default: null` vs. absent distinguishability mechanism | `Pydantic.BaseModel.model_fields_set` | Native Pydantic mechanism, no custom sentinel type needed - stricter and simpler than the project's prior `is not None` convention |
 | `PRESENCE` vs. `BOOLEAN` as two distinct type tokens | Kept separate (not inferred from data shape) | Resolves a real ambiguity found during Specify: `public` (native JSON boolean, no transform) and `issue_is_pull_request` (presence-of-field boolean, today's `as: boolean`) cannot share one token without the compiler guessing from the payload's actual shape |
 
