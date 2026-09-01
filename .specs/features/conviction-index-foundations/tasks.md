@@ -32,7 +32,7 @@ own Design → Tasks pass when picked up, in the order `spec.md` fixes.
 
 | Code Layer | Required Test Type | Coverage Expectation | Location Pattern | Run Command |
 | --- | --- | --- | --- | --- |
-| Domain model (`FieldRule.type` grammar) | unit | Every scalar token accepted; `ARRAY<T>`/`ROW<...>`/`ARRAY<ROW<...>>` accepted; invalid token rejected; `as:` rejected; `model_fields_set` reflects default-declared-vs-absent | `tests/flink/normalization/test_models.py` | `python -m pytest tests/flink/normalization/test_models.py` |
+| Domain model (`FieldRule.type` grammar) | unit | Every scalar token accepted; `ARRAY<T>` accepted; invalid token rejected; `as:`/`expression:` rejected; `model_fields_set` reflects default-declared-vs-absent | `tests/flink/normalization/test_models.py` | `python -m pytest tests/flink/normalization/test_models.py` |
 | Domain evaluator (`_compile_rule`) | unit | 1:1 with P1 AC3/AC4/AC6/AC7 | `tests/flink/normalization/domain/test_evaluator.py` | `python -m pytest tests/flink/normalization/domain/test_evaluator.py` |
 | Config contract (`github.yml`) | integration (pre-existing) | Identical `NormalizedEvent` output pre/post migration (P1 AC8) - no new test written, existing suite re-run | `tests/flink/normalization/test_contracts_github.py` | `python -m pytest tests/flink/normalization/test_contracts_github.py` |
 | Rule doc (`.claude/rules/flink-contract-dsl.md`) | none | Doc-only | - | build gate only |
@@ -75,7 +75,7 @@ T3 → T4
 ### T1: Add `type:` grammar to `FieldRule`, remove `as_`
 
 **What**: `FieldRule` gains a required `type: str` field validated against the grammar
-(`SCALAR | ARRAY<...> | ROW<...>`, one level of nesting); `as_`/`alias="as"` is removed.
+(`SCALAR | ARRAY<...>`); `as_`/`alias="as"` and `expression` are removed from the model.
 **Where**: `flink/normalization/models.py`
 **Depends on**: None
 **Reuses**: `FROM_PATTERN`'s `field_validator` + `ValueError`-on-mismatch shape
@@ -92,11 +92,10 @@ T3 → T4
 - [ ] `type:` is required (no default) on `FieldRule`
 - [ ] Every scalar token (`STRING`, `BOOLEAN`, `PRESENCE`, `TIMESTAMP`, `BIGINT`, `INT`, `DOUBLE`)
       validates
-- [ ] `ARRAY<T>` (scalar `T`) and `ROW<field: TYPE, ...>` (scalar field types) validate
-- [ ] `ARRAY<ROW<...>>` validates (the `GollumEvent.pages` case)
-- [ ] An invalid token (top-level or nested inside `ROW<...>`) raises a `ValidationError` naming
-      that token, not a generic parse failure
+- [ ] `ARRAY<T>` (scalar `T`) validates
+- [ ] An invalid token raises a `ValidationError` naming that token, not a generic parse failure
 - [ ] A contract declaring `as:` is rejected (`extra="forbid"` on the unknown key)
+- [ ] A contract declaring `expression:` is rejected (`extra="forbid"` on the unknown key)
 - [ ] `FieldRule(...).model_fields_set` correctly distinguishes an explicitly-declared
       `default: null` from an absent `default`
 - [ ] Gate check passes: `python -m pytest tests/flink/normalization/test_models.py`
@@ -115,8 +114,9 @@ T3 → T4
 `rule.default is None` to `"default" not in rule.model_fields_set`.
 **Where**: `flink/normalization/domain/evaluator.py`
 **Depends on**: T1
-**Reuses**: The existing `_compile_rule` method body - only the two `case` arms and the `default`
-check line change; `case FieldRule(take=take)` and `case _:` are untouched
+**Reuses**: The existing `_compile_rule` method body - the two `case` arms and the `default` check
+line change, and the leading `if rule.expression: return rule.expression` branch is deleted;
+`case FieldRule(take=take)` and `case _:` are untouched
 **Requirement**: CVF-03, CVF-04, CVF-06
 **Authorship**: `own` - user writes, agent reviews
 
@@ -136,8 +136,11 @@ check line change; `case FieldRule(take=take)` and `case _:` are untouched
 - [ ] A field with no `default:` declared and one with `default: null` explicitly declared both
       compile correctly, and the evaluator's `default` branch is driven by `model_fields_set`, not
       a value check
+- [ ] The `if rule.expression: return rule.expression` branch is gone - `_compile_rule` no longer
+      references `rule.expression`
 - [ ] Gate check passes: `python -m pytest tests/flink/normalization/domain/test_evaluator.py`
-- [ ] Test count recorded (no silent deletions from the pre-existing `TestCompileRule` cases)
+- [ ] Test count recorded (pre-existing `TestCompileRule` cases exercising `expression:` are
+      intentionally removed, not silently dropped - noted in the commit, not just deleted)
 
 **Tests**: unit
 **Gate**: quick
@@ -148,9 +151,7 @@ check line change; `case FieldRule(take=take)` and `case _:` are untouched
 
 **What**: Every field rule in `interface/sources/github/normalization.yml` gains an explicit
 `type:`; all `as: timestamp` become `type: TIMESTAMP`, the one `as: boolean` becomes
-`type: PRESENCE`, every other field gets its matching scalar/`ARRAY<...>`/`ROW<...>` type
-(`GollumEvent.pages` becomes `ARRAY<ROW<page_name: STRING, title: STRING, summary: STRING,
-action: STRING, sha: STRING>>`).
+`type: PRESENCE`, every other field gets its matching scalar/`ARRAY<...>` type.
 **Where**: `interface/sources/github/normalization.yml`
 **Depends on**: T1, T2
 **Reuses**: n/a (config file)
