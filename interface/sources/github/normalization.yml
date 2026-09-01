@@ -9,7 +9,7 @@ envelope:
     from: actor.login
   event_time:
     from: created_at
-    as: timestamp
+    type: TIMESTAMP
 
 common:
   repo_id:
@@ -43,10 +43,10 @@ event_types:
       from: payload.issue.state
     issue_created_at:
       from: payload.issue.created_at
-      as: timestamp
+      type: TIMESTAMP
     issue_updated_at:
       from: payload.issue.updated_at
-      as: timestamp
+      type: TIMESTAMP
     issue_comments_count:
       from: payload.issue.comments
     issue_user_login:
@@ -56,7 +56,7 @@ event_types:
       take: name
     issue_is_pull_request:
       from: payload.issue.pull_request
-      as: boolean
+      type: BOOLEAN
     comment_id:
       from: payload.comment.id
     comment_body:
@@ -65,10 +65,10 @@ event_types:
       from: payload.comment.user.login
     comment_created_at:
       from: payload.comment.created_at
-      as: timestamp
+      type: TIMESTAMP
     comment_updated_at:
       from: payload.comment.updated_at
-      as: timestamp
+      type: TIMESTAMP
 
   PullRequestEvent:
     action:
@@ -120,7 +120,7 @@ event_types:
       default: null
     review_submitted_at:
       from: payload.review.submitted_at
-      as: timestamp
+      type: TIMESTAMP
     review_user_login:
       from: payload.review.user.login
 
@@ -150,10 +150,10 @@ event_types:
       from: payload.comment.commit_id
     comment_created_at:
       from: payload.comment.created_at
-      as: timestamp
+      type: TIMESTAMP
     comment_updated_at:
       from: payload.comment.updated_at
-      as: timestamp
+      type: TIMESTAMP
     comment_user_login:
       from: payload.comment.user.login
   CreateEvent:
@@ -180,10 +180,6 @@ event_types:
 
   PublicEvent: {}
 
-  GollumEvent:
-    pages:
-      expression: "payload.pages[].{page_name: page_name, title: title, summary: summary, action: action, sha: sha}"
-
   IssuesEvent:
     action:
       from: payload.action
@@ -197,10 +193,10 @@ event_types:
       from: payload.issue.state
     issue_created_at:
       from: payload.issue.created_at
-      as: timestamp
+      type: TIMESTAMP
     issue_updated_at:
       from: payload.issue.updated_at
-      as: timestamp
+      type: TIMESTAMP
     issue_comments_count:
       from: payload.issue.comments
     issue_user_login:
