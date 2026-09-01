@@ -105,9 +105,7 @@ class TestNormalizationContract(TestCase):
                 "org_login": {"from": "org.login", "type": "STRING", "default": None},
             },
             "event_types": {
-                "WatchEvent": {
-                    "action": {"from": "payload.action", "type": "STRING"}
-                },
+                "WatchEvent": {"action": {"from": "payload.action", "type": "STRING"}},
                 "IssueCommentEvent": {
                     "issue_labels": {
                         "from": "payload.issue.labels",
