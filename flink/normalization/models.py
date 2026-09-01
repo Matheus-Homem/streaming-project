@@ -1,17 +1,18 @@
 import re
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 FROM_PATTERN = re.compile(r"^[^.]+(\.[^.]+)*$")
+TYPES = ["STRING", "BOOLEAN", "PRESENCE", "TIMESTAMP", "BIGINT", "INT", "DOUBLE"]
 
 
 class FieldRule(BaseModel):
     model_config = ConfigDict(extra="forbid")
     from_: Optional[str] = Field(default=None, alias="from")
     take: Optional[str] = Field(default=None)
-    as_: Optional[Literal["boolean", "timestamp"]] = Field(default=None, alias="as")
+    type_: str = Field(alias="type")
     default: Optional[Any] = Field(default=None)
     expression: Optional[str] = Field(default=None)
 
@@ -22,6 +23,14 @@ class FieldRule(BaseModel):
             raise ValueError(
                 f"'from_' must be dot-separated (e.g. 'a.b.c'), got: {v!r}"
             )
+        return v
+
+    @field_validator("type_")
+    @classmethod
+    def check_type_is_formatted(cls, v: str) -> str:
+        ARRAY_TYPES = [f"ARRAY<{t}>" for t in TYPES]
+        if (v not in TYPES) and (v not in ARRAY_TYPES):
+            raise ValueError(f"'type_' must be {TYPES} or {ARRAY_TYPES}, got: {v!r}")
         return v
 
     @model_validator(mode="after")
