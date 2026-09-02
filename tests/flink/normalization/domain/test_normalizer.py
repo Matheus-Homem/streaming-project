@@ -28,7 +28,7 @@ class TestEventNormalizerNormalize(TestCase):
         )
         self.contract = NormalizationContract(
             source="widget",
-            partition_key=FieldRule(**{"from": "id"}),
+            partition_key=FieldRule(**{"from": "id", "type": "STRING"}),
             envelope={},
             common={},
             event_types={},

@@ -80,7 +80,7 @@ class TestNormalizationRulesEventEvaluatorCompileRule(TestCase):
         self.evaluator = NormalizationRulesEventEvaluator()
 
     def test_can_compile_plain_from(self):
-        rule = FieldRule(**{"from": "actor.id"})
+        rule = FieldRule(**{"from": "actor.id", "type": "BIGINT"})
 
         expr = self.evaluator._compile_rule(rule)
 
@@ -91,7 +91,9 @@ class TestNormalizationRulesEventEvaluatorCompileRule(TestCase):
         )
 
     def test_can_compile_take_as_list_pluck(self):
-        rule = FieldRule(**{"from": "payload.issue.labels", "take": "name"})
+        rule = FieldRule(
+            **{"from": "payload.issue.labels", "take": "name", "type": "ARRAY<STRING>"}
+        )
 
         expr = self.evaluator._compile_rule(rule)
 
@@ -99,16 +101,24 @@ class TestNormalizationRulesEventEvaluatorCompileRule(TestCase):
         result = self.evaluator._assess_payload_with_rule(rule, self.event)
         self.assertIn("area/test", result)
 
-    def test_can_compile_as_boolean(self):
-        rule = FieldRule(**{"from": "payload.issue.pull_request", "as": "boolean"})
+    def test_can_compile_presence(self):
+        rule = FieldRule(**{"from": "payload.issue.pull_request", "type": "PRESENCE"})
 
         expr = self.evaluator._compile_rule(rule)
 
         self.assertEqual(expr, "payload.issue.pull_request != `null`")
         self.assertTrue(self.evaluator._assess_payload_with_rule(rule, self.event))
 
-    def test_can_compile_as_timestamp(self):
-        rule = FieldRule(**{"from": "created_at", "as": "timestamp"})
+    def test_can_compile_boolean_passthrough(self):
+        rule = FieldRule(**{"from": "public", "type": "BOOLEAN"})
+
+        expr = self.evaluator._compile_rule(rule)
+
+        self.assertEqual(expr, "public")
+        self.assertTrue(self.evaluator._assess_payload_with_rule(rule, self.event))
+
+    def test_can_compile_timestamp(self):
+        rule = FieldRule(**{"from": "created_at", "type": "TIMESTAMP"})
 
         expr = self.evaluator._compile_rule(rule)
 
@@ -118,8 +128,18 @@ class TestNormalizationRulesEventEvaluatorCompileRule(TestCase):
             1784290892000,
         )
 
-    def test_can_compile_default_null_as_native_missing(self):
-        rule = FieldRule(**{"from": "does.not.exist", "default": None})
+    def test_can_compile_default_null_explicitly_declared(self):
+        rule = FieldRule(
+            **{"from": "does.not.exist", "type": "STRING", "default": None}
+        )
+
+        expr = self.evaluator._compile_rule(rule)
+
+        self.assertEqual(expr, "does.not.exist || `null`")
+        self.assertIsNone(self.evaluator._assess_payload_with_rule(rule, self.event))
+
+    def test_can_compile_with_no_default_declared_at_all(self):
+        rule = FieldRule(**{"from": "does.not.exist", "type": "STRING"})
 
         expr = self.evaluator._compile_rule(rule)
 
@@ -127,7 +147,9 @@ class TestNormalizationRulesEventEvaluatorCompileRule(TestCase):
         self.assertIsNone(self.evaluator._assess_payload_with_rule(rule, self.event))
 
     def test_can_compile_default_with_non_null_fallback(self):
-        rule = FieldRule(**{"from": "org.login", "default": "unknown"})
+        rule = FieldRule(
+            **{"from": "org.login", "type": "STRING", "default": "unknown"}
+        )
 
         expr = self.evaluator._compile_rule(rule)
 
@@ -138,23 +160,16 @@ class TestNormalizationRulesEventEvaluatorCompileRule(TestCase):
         )
 
     def test_can_compile_default_applied_when_field_is_missing(self):
-        rule = FieldRule(**{"from": "does.not.exist", "default": "fallback"})
+        rule = FieldRule(
+            **{"from": "does.not.exist", "type": "STRING", "default": "fallback"}
+        )
 
-        expr = self.evaluator._compile_rule(rule)
+        self.evaluator._compile_rule(rule)
 
         self.assertEqual(
             self.evaluator._assess_payload_with_rule(rule, self.event),
             "fallback",
         )
-
-    def test_can_compile_expression_passed_through_verbatim(self):
-        raw = "payload.issue.pull_request != `null`"
-        rule = FieldRule(expression=raw)
-
-        expr = self.evaluator._compile_rule(rule)
-
-        self.assertEqual(expr, raw)
-        self.assertTrue(self.evaluator._assess_payload_with_rule(rule, self.event))
 
 
 class TestNormalizationRulesEventEvaluatorApply(TestCase):
@@ -163,11 +178,13 @@ class TestNormalizationRulesEventEvaluatorApply(TestCase):
         self.evaluator = NormalizationRulesEventEvaluator()
         self.contract = NormalizationContract(
             source="widget",
-            partition_key=FieldRule(**{"from": "id"}),
-            envelope={"entity_id": FieldRule(**{"from": "actor.id"})},
-            common={"widget_type": FieldRule(**{"from": "type"})},
+            partition_key=FieldRule(**{"from": "id", "type": "STRING"}),
+            envelope={"entity_id": FieldRule(**{"from": "actor.id", "type": "BIGINT"})},
+            common={"widget_type": FieldRule(**{"from": "type", "type": "STRING"})},
             event_types={
-                "CreatedEvent": {"created_by": FieldRule(**{"from": "by"})},
+                "CreatedEvent": {
+                    "created_by": FieldRule(**{"from": "by", "type": "STRING"})
+                },
             },
         )
         self.event = RawEvent(
@@ -198,7 +215,9 @@ class TestNormalizationRulesEventEvaluatorApply(TestCase):
 
     def test_can_return_null_field_when_path_is_absent(self):
         contract = self.contract.model_copy(deep=True)
-        contract.common["missing"] = FieldRule(**{"from": "does.not.exist"})
+        contract.common["missing"] = FieldRule(
+            **{"from": "does.not.exist", "type": "STRING"}
+        )
 
         result = self.evaluator.apply(event=self.event, contract=contract)
 

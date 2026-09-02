@@ -207,7 +207,7 @@ would deliver a self-service surface whose changes do not take effect.
 going to need one once the audience was reframed as SQL-literate. The `flink-aggregation` feature is
 this stage's first (and only planned) increment: a hand-authored `.sql` query, no compiler.
 
-`.specs/RFC.md`'s Approach section is explicit: start from a basic MVP and add incrementally rather
-than designing the full target architecture up front. Designing all four contract stages before
-building one would violate that. The normalization contract is the first increment; the rest is
-shaped by what that one teaches.
+The project's incremental-MVP approach (`.specs/STATE.md`, note under `AD-006`) is explicit: start
+from a basic MVP and add incrementally rather than designing the full target architecture up front.
+Designing all four contract stages before building one would violate that. The normalization contract
+is the first increment; the rest is shaped by what that one teaches.

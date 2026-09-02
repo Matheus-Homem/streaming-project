@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This is a hands-on learning project (see `.specs/RFC.md`). The point is for the user to build a streaming data pipeline while actually learning Kafka, Flink, distributed storage/observability tooling (OpenSearch, Grafana), and how to plan an architecture and choose components - not to have those things handed to them working. Kubernetes, Drone (CI/CD), and Terraform (IaC) are opportunistic additions if a natural chance to use them shows up; they are not required.
+This is a hands-on learning project. See [`docs/VISION.md`](docs/VISION.md) for what the platform is, why it exists, and its technology list, and [`docs/USE-CASES.md`](docs/USE-CASES.md) for the problem it's currently pointed at (the Conviction Index).
 
 ## Interaction & conventions
 
@@ -34,7 +34,8 @@ Chat: PT-BR, matching the user. Everything else is English by default (code, ide
 - `shared/` - cross-cutting utilities (`models.py` for `RawEvent`, `logger.py` for per-module logging setup)
 - `tests/` - mirrors `ingestion/`/`flink/`/`shared/` 1:1, one test file per source module
 - `infra/docker/` - local infra (`docker-compose.yml`, `docker-compose.dev.yml`, topic-init script)
-- `.specs/` - the spec-driven workflow: `RFC.md` (why this project exists), `STATE.md` (decisions + handoff), `PLATFORM.md` (contract-driven-authoring decision), `features/[name]/` (spec, design, tasks per feature)
+- `docs/` - `VISION.md` (what the platform is and why) and `USE-CASES.md` (what it's used for) - never references `.specs/` or `.mentor/`
+- `.specs/` - the spec-driven workflow: `STATE.md` (decisions + handoff), `PLATFORM.md` (contract-driven-authoring decision), `features/[name]/` (spec, design, tasks per feature)
 
 ## Temporary files
 

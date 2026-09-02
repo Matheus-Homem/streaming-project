@@ -68,20 +68,17 @@ class NormalizationRulesEventEvaluator(EventEvaluator):
         def _wrap_jmespath_value(value: Any) -> str:
             return f"`{json.dumps(value)}`"
 
-        if rule.expression:
-            return rule.expression
-
         match rule:
             case FieldRule(take=take) if take:
                 base = f"{rule.from_}[].{take}"
-            case FieldRule(as_="boolean"):
+            case FieldRule(type_="PRESENCE"):
                 base = f"{rule.from_} != `null`"
-            case FieldRule(as_="timestamp"):
+            case FieldRule(type_="TIMESTAMP"):
                 base = f"iso_to_millis({rule.from_})"
             case _:
                 base = rule.from_
 
-        if rule.default is None:
+        if "default" not in rule.model_fields_set:
             return base
         return f"{base} || {_wrap_jmespath_value(rule.default)}"
 

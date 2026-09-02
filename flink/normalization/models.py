@@ -1,19 +1,19 @@
 import re
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 FROM_PATTERN = re.compile(r"^[^.]+(\.[^.]+)*$")
+TYPES = ["STRING", "BOOLEAN", "PRESENCE", "TIMESTAMP", "BIGINT", "INT", "DOUBLE"]
 
 
 class FieldRule(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    from_: Optional[str] = Field(default=None, alias="from")
+    from_: str = Field(alias="from")
     take: Optional[str] = Field(default=None)
-    as_: Optional[Literal["boolean", "timestamp"]] = Field(default=None, alias="as")
+    type_: str = Field(alias="type")
     default: Optional[Any] = Field(default=None)
-    expression: Optional[str] = Field(default=None)
 
     @field_validator("from_")
     @classmethod
@@ -24,11 +24,13 @@ class FieldRule(BaseModel):
             )
         return v
 
-    @model_validator(mode="after")
-    def require_only_from_or_expression(self) -> "FieldRule":
-        if not any([self.from_, self.expression]) or all([self.from_, self.expression]):
-            raise ValueError("FieldRule must define either 'from_' or 'expression'")
-        return self
+    @field_validator("type_")
+    @classmethod
+    def check_type_is_formatted(cls, v: str) -> str:
+        ARRAY_TYPES = [f"ARRAY<{t}>" for t in TYPES]
+        if (v not in TYPES) and (v not in ARRAY_TYPES):
+            raise ValueError(f"'type_' must be {TYPES} or {ARRAY_TYPES}, got: {v!r}")
+        return v
 
 
 class NormalizationContract(BaseModel):

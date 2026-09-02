@@ -3,16 +3,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest import TestCase
 
-import flink.normalization
 from flink.normalization.domain.contract_repository import YamlContractRepository
 from flink.normalization.domain.evaluator import NormalizationRulesEventEvaluator
 from flink.normalization.domain.normalizer import EventNormalizer
 from shared.models import RawEvent
 from tests.fixtures.events import DOC_SHAPED_GITHUB_EVENTS, SAMPLE_SHAPED_GITHUB_EVENTS
 
-CONTRACTS_DIR = (
-    Path(flink.normalization.__file__).parent.parent.parent / "interface" / "sources"
-)
+CONTRACTS_DIR = Path(__file__).parent.parent.parent / "fixtures" / "contracts"
 
 OBSERVED_AT = "2026-07-17T12:21:32+00:00"
 OBSERVED_AT_MILLIS = 1784290892000
@@ -104,7 +101,6 @@ PER_TYPE_FIELDS = {
     },
     "DeleteEvent": {"ref", "ref_type", "pusher_type"},
     "PublicEvent": set(),
-    "GollumEvent": {"pages"},
     "IssuesEvent": {
         "action",
         "issue_id",
@@ -315,22 +311,6 @@ class TestGithubContractDocResolvedEventTypes(GithubContractTestCase):
         self.assertEqual(set(result), ENVELOPE_FIELDS | COMMON_FIELDS)
         self.assertEqual(result["event_type"], "PublicEvent")
         self.assertEqual(result["repo_name"], "octo/repo")
-
-    def test_can_curate_gollum_pages_dropping_html_url(self):
-        result = self.normalize(DOC_SHAPED_GITHUB_EVENTS["GollumEvent"])
-
-        self.assertEqual(
-            result["pages"],
-            [
-                {
-                    "page_name": "Home",
-                    "title": "Home",
-                    "summary": None,
-                    "action": "edited",
-                    "sha": "abc123",
-                }
-            ],
-        )
 
     def test_can_resolve_issues_event_assignees_as_logins(self):
         result = self.normalize(DOC_SHAPED_GITHUB_EVENTS["IssuesEvent"])
